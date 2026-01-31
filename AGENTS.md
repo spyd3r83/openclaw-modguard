@@ -1,135 +1,306 @@
-# AGENTS.md - Development Guide for Agentic Coding
+# AGENTS.md - Development Guide for OpenClaw Guard
+
+## Project Overview
+
+OpenClaw Guard is a PII/Sensitive Data Masking plugin for OpenClaw. It detects and masks sensitive information before it reaches AI models, storing encrypted values in a vault for reversible detokenization.
 
 ## Core Constraints
 
-- Code development in `./`
-- Docker Compose services managed in `docker/` subdirectory
-- Plane MCP server deployment via Docker
+- Plugin source: `./`
+- Production OpenClaw: `$OPENCLAW_DIR/` (DO NOT MODIFY)
+- Dev environment: `./dev/`
+- Package manager: **pnpm 10.x** required
+- Node.js: **22.x** required
 
-## Mindset & Principles
+## Dev Environment
 
-- **Think first, then act** - Understand the problem before writing code
-- **Keep it simple** - Simplicity is not optional; avoid unnecessary files and complexity
-- **Structure over strings** - Use enums and types instead of magic strings
-- **Fail fast** - Validate configuration at startup; crash immediately on missing config
-- **One responsibility** - Functions should do one thing well
-- **Test relentlessly** - If it isn't tested, it doesn't exist
-- **Document honestly** - Write READMEs that actually work; document edge cases
-- **Security by design** - Validate all input; least privilege everywhere
-- **External services fail** - All external integrations will fail; plan for it
-- **Hope is not a strategy** - Add timeouts, retries, and fallbacks for external calls
-- **All I/O is async** - Treat all network/disk operations as asynchronous
-- **Group related logic** - Cohesive functions are easier to test and maintain
+### Setup
+```bash
+cd ./dev
+./setup.sh
+```
+
+### Ports (separate from production)
+- Gateway: `28789` (production uses `18789`)
+- Bridge: `28790` (production uses `18790`)
+
+### Commands
+```bash
+# View logs
+docker compose -f dev/docker-compose.yml logs -f openclaw-gateway
+
+# List plugins
+docker compose -f dev/docker-compose.yml run --rm openclaw-cli plugins list
+
+# Stop
+docker compose -f dev/docker-compose.yml down
+
+# Restart after code changes
+pnpm build && docker compose -f dev/docker-compose.yml restart openclaw-gateway
+```
+
+## Plugin Structure (Critical)
+
+### Required Files
+
+```
+openclaw-guard/
+├── openclaw.plugin.json    # Plugin manifest (MUST match plugin ID)
+├── package.json            # With openclaw.extensions pointing to dist/
+├── dist/                   # Compiled JS output (required for external plugins)
+│   └── index.js            # Plugin entry point
+└── src/
+    └── index.ts            # Source with default export
+```
+
+### openclaw.plugin.json (Critical)
+```json
+{
+  "id": "guard",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "vaultPath": { "type": "string" },
+      "masterKey": { "type": "string" }
+    }
+  }
+}
+```
+
+**Important:** The `configSchema.properties` MUST include all config fields the plugin expects. With `additionalProperties: false`, any unlisted properties will be rejected.
+
+### package.json (Critical)
+```json
+{
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3"]
+  }
+}
+```
+
+**Important:**
+- `extensions` must point to compiled JS, not TypeScript source
+- Native modules (better-sqlite3) require explicit build permission in pnpm 10.x
+
+### Plugin Export Pattern
+```typescript
+// src/index.ts
+const guardPlugin = {
+  id: 'guard',  // Must match openclaw.plugin.json
+  name: 'OpenClaw Guard',
+  version: '0.1.0',
+  description: 'Secure PII masking plugin',
+  configSchema: { /* ... */ },
+  register(api: OpenClawPluginApi): void {
+    // Register commands, hooks, etc.
+  }
+};
+
+export default guardPlugin;
+```
+
+### Command Registration
+```typescript
+// Command names must:
+// - Start with a letter
+// - Contain only letters, numbers, hyphens, underscores
+// - NO leading slash, NO angle brackets
+
+// WRONG:
+api.registerCommand({ name: '/guard-status', ... });
+api.registerCommand({ name: 'guard-detect <text>', ... });
+
+// CORRECT:
+api.registerCommand({ name: 'guard-status', ... });
+api.registerCommand({ name: 'guard-detect', ... });
+```
 
 ## Build Commands
 
-- `pnpm build` - Compile TypeScript to dist/ (runs tsc, builds A2UI bundle, copies hook metadata)
-- `pnpm ui:build` - Build the web UI (auto-installs UI deps on first run)
+```bash
+pnpm build          # Compile TypeScript to dist/
+pnpm test           # Run Vitest tests
+pnpm test:coverage  # Coverage report (80% threshold)
+pnpm test:e2e       # End-to-end tests
+pnpm lint           # Oxlint
+```
 
-## Type Check
+## tsconfig.json (Critical)
 
-- `npx tsc --noEmit` - Type check without emitting files
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "es2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}
+```
 
-## Lint & Format
+**Critical:** Do NOT set `noEmit: true` - this prevents build output.
 
-- `pnpm lint` - Run Oxlint linter with type-aware checks (unicorn, typescript, oxc plugins)
-- `pnpm lint:fix` - Auto-fix lint issues and reformat with oxfmt
-- `pnpm format` - Check formatting with Oxfmt
-- `pnpm format:fix` - Auto-format code with Oxfmt
-- `pnpm lint:all` - Lint TypeScript and Swift (`pnpm lint && pnpm lint:swift`)
-- `pnpm format:all` - Format TypeScript and Swift (`pnpm format && pnpm format:swift`)
+## Known Issues
 
-## Test Commands
+### ESM Import Issues in Tests
+When running vitest, better-sqlite3 and yargs may fail with:
+- `Database is not a constructor`
+- `yargs is not a function`
 
-- `pnpm test` - Run all Vitest tests (parallel, max 16 workers locally, 3 in CI)
-- `pnpm test:coverage` - Run tests with V8 coverage report (70% lines/funcs/statements, 55% branches)
-- `pnpm test:watch` - Watch mode for continuous testing
-- `pnpm test:e2e` - Run end-to-end tests
-- `pnpm test:live` - Run live tests with real API keys (requires CLAWDBOT_LIVE_TEST=1)
-- `npx vitest run <path/to/test.test.ts>` - Run single test file
-- `npx vitest run -t <test-name>` - Run tests matching name pattern
+**Workaround:** Plugin works correctly when loaded by OpenClaw. Tests need ESM-compatible import patterns.
 
-**Single test example:**
-`npx vitest run src/utils.test.ts`
+### In-Memory Database
+```typescript
+// Skip chmod for in-memory databases
+if (vaultPath !== ':memory:') {
+  fs.chmodSync(vaultPath, 0o600);
+}
+```
 
-**Test by name:**
-`npx vitest run -t "normalizePath should add leading slash"`
+### Plugin ID Mismatch Warning
+OpenClaw warns: `plugin id mismatch (manifest uses "guard", entry hints "openclaw-guard")`
 
-## Development
+This is cosmetic - the plugin loads correctly. To eliminate, either rename package to `@openclaw/guard` or accept the warning.
 
-- `pnpm dev` - Run CLI in development mode
-- `pnpm openclaw <cmd>` - Run OpenClaw CLI command
-- `pnpm gateway:dev` - Start gateway in dev mode (skips channels)
-- `pnpm gateway:watch` - Watch mode for gateway with auto-reload on TS changes
-
-## Code Style Guidelines
+## Code Style
 
 ### Language & Types
-- **TypeScript (ESM)** with strict mode - Node ≥22 required
-- Use `interface` for object shapes, `type` for unions/primitives
-- Avoid `any` and implicit any - use `unknown` for untyped data
-- Prefer utility types: `Pick<T, K>`, `Partial<T>`, `Omit<T, K>`, `Record<K, V>`, `ReturnType<T>`
-- Type guards: `const isFoo = (x: unknown): x is Foo => ...`
-- Async functions always return promises, no callback patterns
+- TypeScript (ESM) with strict mode
+- Use `interface` for object shapes, `type` for unions
+- Avoid `any` - use `unknown` for untyped data
+- Prefix unused parameters with underscore: `_masterKey`
 
 ### Imports
-- Named imports preferred: `import { foo } from 'module'` over `import * as bar`
-- Type-only imports: `import type { Foo } from 'module'` for types only
-- Group imports: external dependencies first, then internal modules (`src/...`), then relative imports
-- Node built-ins: use `node:` prefix: `import fs from "node:fs"`
+```typescript
+// Node built-ins with node: prefix
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 
-### Formatting (Oxfmt)
-- Indentation: 2 spaces, no tabs
-- Semicolons: required
-- Quotes: single quotes, use double for JSX or strings containing single quotes
-- Trailing commas: required in multi-line arrays/objects/functions
-- Line length: ~100-120 characters soft limit
-- Max file lines: aim under 500 LOC, run `pnpm check:loc` to verify
+// Named imports preferred
+import { Vault } from './vault.js';
 
-### Naming Conventions
-- **PascalCase**: Classes, interfaces, types, enums, React components
-- **camelCase**: variables, functions, methods, properties, object keys
-- **UPPER_SNAKE_CASE**: immutable constants, environment variables
-- **kebab-case**: file names, folder names (except component dirs can use PascalCase)
-- Private class members: underscore prefix (`_privateMethod`)
-- Boolean getters: `get isValid()` (not `get valid()`)
-- Event handlers: `handleXxx` (button click, form submit), `onXxx` (props)
+// Type-only imports
+import type { VaultEntry } from './types.js';
+```
 
 ### Error Handling
-- Prefer async/await with try/catch over promise chaining
-- Define typed error classes: `class MyError extends Error { constructor(...) }`
-- Always log errors with context: relevant variables, operation being performed
-- Never silently swallow errors - at minimum, console.error or throw wrapped error
-- Use `throw new Error(...)` with descriptive messages
+```typescript
+// Define typed error classes
+export class VaultError extends Error {
+  constructor(message: string, public readonly context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'VaultError';
+  }
+}
 
-### Comments & Documentation
-- JSDoc for public APIs: `/** @param foo - The foo value */ `
-- Brief inline comments for non-obvious logic or workarounds
-- TODO comments should include issue reference when possible
+// Always include context
+throw new VaultError('Failed to decrypt', { token, category });
+```
 
-## Test Organization
+### Naming Conventions
+- **PascalCase**: Classes, interfaces, types, enums
+- **camelCase**: variables, functions, properties
+- **UPPER_SNAKE_CASE**: constants, env vars
+- **kebab-case**: file names
 
-- Unit tests: colocated `*.test.ts` next to source file in `src/`
-- E2E tests: `*.e2e.test.ts` naming convention
-- Live tests: `*.live.test.ts` (requires real API keys)
-- Test config files: `vitest.config.ts` (unit), `vitest.e2e.config.ts`, `vitest.live.config.ts`
-- Setup: `test/setup.ts` runs before all test suites
+## Testing
 
-## Project Structure
+```bash
+# Run all tests
+pnpm test
 
-- `src/` - Main source code (CLI, commands, gateway, agents, channels)
-- `test/` - Test utilities, fixtures, setup files
-- `dist/` - Compiled output (not committed to git)
-- `extensions/` - Plugin packages (workspace packages)
-- `apps/` - Native applications (iOS, Android, macOS)
-- `ui/` - Web UI (React/Vite)
-- `scripts/` - Build and utility scripts
+# Run single file
+npx vitest run test/vault.test.ts
 
-## Important Notes
+# Run by pattern
+npx vitest run -t "should encrypt"
 
-- Package manager: **pnpm 10.23.0** required
-- TypeScript: strict mode enabled in tsconfig.json
-- Oxlint plugins: unicorn, typescript, oxc (correctness category as error)
-- Don't create files for one-time operations or hypothetical future requirements
-- Three similar lines of code is better than a premature abstraction
-- Only add features explicitly requested; avoid "helpful" improvements
+# Watch mode
+pnpm test:watch
+```
+
+### Test Organization
+- Unit tests: `test/*.test.ts`
+- E2E tests: `test/*.e2e.test.ts`
+- Accuracy tests: `test/*.accuracy.test.ts`
+
+## Security Considerations
+
+- Vault uses AES-256-GCM encryption
+- PBKDF2 key derivation (100,000 iterations)
+- Unique salt and IV per entry
+- File permissions set to 0o600
+- Memory zeroing for sensitive data via `secureZero()`
+
+## Project Files
+
+```
+src/
+├── index.ts          # Plugin entry point
+├── vault.ts          # Encrypted SQLite storage
+├── detector.ts       # PII pattern detection
+├── tokenizer.ts      # Value-to-token conversion
+├── policy.ts         # Rule-based action decisions
+├── audit.ts          # JSONL audit logging
+├── security.ts       # Crypto utilities
+├── backup.ts         # Vault backup/restore
+├── errors.ts         # Typed error classes
+├── types.ts          # TypeScript interfaces
+├── patterns/         # Detection regex patterns
+│   ├── pii.ts        # Email, phone, SSN, credit card
+│   ├── secrets.ts    # API keys, tokens, PEM blocks
+│   └── network.ts    # IPv4, IPv6 addresses
+└── cli/              # Standalone CLI commands
+    ├── index.ts
+    ├── status.ts
+    ├── detect.ts
+    └── audit.ts
+```
+
+## Debugging
+
+### Check if plugin loads
+```bash
+docker compose -f dev/docker-compose.yml logs openclaw-gateway 2>&1 | grep -i guard
+```
+
+Expected output:
+```
+OpenClaw Guard plugin registered
+```
+
+### Check for errors
+```bash
+docker compose -f dev/docker-compose.yml logs openclaw-gateway 2>&1 | grep -E "failed|error|Error"
+```
+
+### Verify dist/ exists
+```bash
+ls -la dist/index.js
+```
+
+If missing, run `pnpm build`.
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Build | `pnpm build` |
+| Test | `pnpm test` |
+| Start dev | `./dev/setup.sh` |
+| View logs | `docker compose -f dev/docker-compose.yml logs -f openclaw-gateway` |
+| Restart | `pnpm build && docker compose -f dev/docker-compose.yml restart openclaw-gateway` |
+| Stop | `docker compose -f dev/docker-compose.yml down` |
+
+## Bug Tracking
+
+See `bugs.md` for known issues and their status.
