@@ -61,3 +61,5 @@ temp/
 .yarn/plugins
 .yarn/sdks
 .yarn/versions
+security-audit-plan.md
+bugs.md

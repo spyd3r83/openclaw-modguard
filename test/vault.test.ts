@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 
 describe('Vault', () => {
   const vaultPath = ':memory:';
-  const masterKey = 'test-master-key-12345678';
+  const masterKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   let vault: Vault;
 
   beforeEach(() => {

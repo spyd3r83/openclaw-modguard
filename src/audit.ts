@@ -24,11 +24,16 @@ const DEFAULT_LOG_DIR = '.openclaw/guard';
 const DEFAULT_LOG_FILE = 'audit.jsonl';
 const MAX_QUEUE_SIZE = 1000;
 const MAX_SEQUENCE_CACHE_SIZE = 10000;
+const DEFAULT_AUDIT_KEY = 'openclaw-guard-audit-key';
 
 interface WriteQueueItem {
   entry: AuditEntry;
   resolve: (value: void) => void;
   reject: (reason?: unknown) => void;
+}
+
+interface SignedAuditEntry extends AuditEntry {
+  signature: string;
 }
 
 export class AuditLogger {
@@ -41,8 +46,9 @@ export class AuditLogger {
   private retentionPolicy: RetentionPolicy;
   private sequenceCache: Set<number>;
   private minLevel: LogLevel;
+  private auditKey: Buffer;
 
-  constructor(logDir?: string, retentionPolicy?: Partial<RetentionPolicy>, minLevel: LogLevel = 'info') {
+  constructor(logDir?: string, retentionPolicy?: Partial<RetentionPolicy>, minLevel: LogLevel = 'info', auditKey?: string | Buffer) {
     this.logDir = logDir || path.join(process.env.HOME || process.cwd(), DEFAULT_LOG_DIR);
     this.logPath = path.join(this.logDir, DEFAULT_LOG_FILE);
     this.currentSequence = 0;
@@ -51,6 +57,7 @@ export class AuditLogger {
     this.fileHandle = null;
     this.minLevel = minLevel;
     this.sequenceCache = new Set();
+    this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || Buffer.from(DEFAULT_AUDIT_KEY, 'utf8');
     this.retentionPolicy = {
       enabled: retentionPolicy?.enabled ?? false,
       maxAgeDays: retentionPolicy?.maxAgeDays ?? 90,
@@ -72,7 +79,7 @@ export class AuditLogger {
     this.fileHandle = await open(this.logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
   }
 
-  async log(entry: Omit<AuditEntry, 'sequence' | 'timestamp'>): Promise<void> {
+  async log(entry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'>): Promise<void> {
     if (!this.shouldLog(entry.level)) {
       return;
     }
@@ -81,10 +88,20 @@ export class AuditLogger {
       throw new AuditWriteError('Audit write queue is full', { queueSize: this.writeQueue.length });
     }
 
-    const fullEntry: AuditEntry = {
-      ...entry,
+    const baseEntry: Omit<SignedAuditEntry, 'sequence' | 'timestamp' | 'signature'> = {
+      operation: entry.operation,
+      sessionId: entry.sessionId,
+      level: entry.level,
+      success: entry.success,
+      duration: entry.duration,
+      details: entry.details
+    };
+
+    const fullEntry: SignedAuditEntry = {
+      ...baseEntry,
       sequence: ++this.currentSequence,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      signature: this.signEntry(baseEntry, this.currentSequence)
     };
 
     return new Promise<void>((resolve, reject) => {
@@ -245,11 +262,23 @@ export class AuditLogger {
     const sequenceGaps: number[] = [];
     const duplicateEntries: number[] = [];
     const corruptedLines: number[] = [];
+    const invalidSignatures: number[] = [];
 
     const seenSequences = new Map<number, number>();
     let lastSequence = 0;
 
     for (const entry of filteredEntries) {
+      const signedEntry = entry as SignedAuditEntry;
+
+      if (!signedEntry.signature) {
+        invalidSignatures.push(entry.sequence);
+        continue;
+      }
+
+      if (!this.verifyEntry(signedEntry)) {
+        invalidSignatures.push(entry.sequence);
+      }
+
       if (seenSequences.has(entry.sequence)) {
         duplicateEntries.push(entry.sequence);
       } else {
@@ -266,7 +295,7 @@ export class AuditLogger {
     const checksum = this.calculateChecksum(filteredEntries);
 
     return {
-      valid: sequenceGaps.length === 0 && duplicateEntries.length === 0 && corruptedLines.length === 0,
+      valid: sequenceGaps.length === 0 && duplicateEntries.length === 0 && corruptedLines.length === 0 && invalidSignatures.length === 0,
       sequenceGaps,
       duplicateEntries,
       corruptedLines,
@@ -475,6 +504,29 @@ export class AuditLogger {
 
   getLogPath(): string {
     return this.logPath;
+  }
+
+  private signEntry(entry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'>, sequence: number): string {
+    const data = JSON.stringify({ ...entry, sequence });
+    const hmac = crypto.createHmac('sha256', this.auditKey);
+    hmac.update(data);
+    return hmac.digest('hex');
+  }
+
+  private verifyEntry(entry: SignedAuditEntry): boolean {
+    const entryWithoutSignature: Omit<AuditEntry, 'signature'> = {
+      operation: entry.operation,
+      sessionId: entry.sessionId,
+      level: entry.level,
+      success: entry.success,
+      duration: entry.duration,
+      details: entry.details,
+      sequence: entry.sequence,
+      timestamp: entry.timestamp
+    };
+
+    const expectedSignature = this.signEntry(entryWithoutSignature as any, entry.sequence);
+    return entry.signature === expectedSignature;
   }
 
   async *follow(filter?: AuditFilter, pollIntervalMs: number = 100): AsyncGenerator<AuditEntry> {

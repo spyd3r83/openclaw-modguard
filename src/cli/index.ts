@@ -13,6 +13,8 @@ import * as fs from 'node:fs/promises';
 
 const yargs: any = (yargsModule as any).default;
 
+const MAX_QUERY_LIMIT = 1000;
+
 const auditLogger = initializeGlobalAuditLogger();
 
 
@@ -216,6 +218,8 @@ async function handleVaultList(args: any): Promise<void> {
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
 
+    const effectiveLimit = Math.min(args.limit || 50, MAX_QUERY_LIMIT);
+
     let query = 'SELECT id, token, category, created_at, expires_at FROM entries WHERE 1=1';
     const params: any[] = [];
 
@@ -231,7 +235,7 @@ async function handleVaultList(args: any): Promise<void> {
     }
 
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(args.limit, args.offset);
+    params.push(effectiveLimit, args.offset || 0);
 
     const entries = (vault as any).db.prepare(query).all(...params) as VaultEntry[];
 
@@ -295,7 +299,12 @@ async function handleVaultList(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error listing vault entries: ${error}`);
+
+    const safeMessage = error instanceof Error && 'toJSON' in error
+      ? (error as any).toJSON().message
+      : 'Failed to list vault entries';
+
+    console.error(`Error: ${safeMessage}`);
     process.exit(1);
   }
 }
@@ -839,6 +848,10 @@ async function handleVaultExport(args: any): Promise<void> {
 }
 
 function parseDuration(duration: string): number {
+  if (typeof duration !== 'string' || duration.length === 0) {
+    throw new Error('Invalid duration: must be a non-empty string');
+  }
+
   const match = duration.match(/^(\d+)([hdm])$/);
   if (!match) {
     throw new Error(`Invalid duration format: ${duration}. Expected format: <number><unit> where unit is h (hours), d (days), or m (minutes)`);
@@ -846,6 +859,10 @@ function parseDuration(duration: string): number {
 
   const value = parseInt(match[1], 10);
   const unit = match[2];
+
+  if (value < 0 || value > 365000) {
+    throw new Error('Invalid duration value: must be between 0 and 365000');
+  }
 
   const unitToMs = {
     'm': 60000,

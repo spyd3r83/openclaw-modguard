@@ -10,7 +10,7 @@ describe('Tokenizer', () => {
   let session: SessionId;
 
   beforeEach(() => {
-    vault = new Vault(':memory:', 'test-master-key-12345678');
+    vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
   });
@@ -858,7 +858,7 @@ describe('Tokenizer', () => {
     });
 
     it('should handle vault connection gracefully', async () => {
-      const testVault = new Vault(':memory:', 'test-key');
+      const testVault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       const testTokenizer = new Tokenizer(testVault);
       const testSession = testTokenizer.generateSessionId();
 

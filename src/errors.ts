@@ -6,6 +6,15 @@ export class VaultError extends Error {
   ) {
     super(message);
     this.name = 'VaultError';
+    Object.setPrototypeOf(this, VaultError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code
+    };
   }
 }
 
@@ -90,6 +99,15 @@ export class AuditError extends Error {
   ) {
     super(message);
     this.name = 'AuditError';
+    Object.setPrototypeOf(this, AuditError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code
+    };
   }
 }
 

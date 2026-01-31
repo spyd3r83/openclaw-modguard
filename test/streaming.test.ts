@@ -76,7 +76,7 @@ describe('StreamingMasker', () => {
   let session: string;
 
   beforeEach(async () => {
-    vault = new Vault(':memory:', 'test-master-key');
+    vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -323,7 +323,7 @@ describe('StreamProcessor', () => {
   let session: string;
 
   beforeEach(async () => {
-    vault = new Vault(':memory:', 'test-master-key');
+    vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -447,7 +447,7 @@ describe('Streaming Edge Cases', () => {
   let session: string;
 
   beforeEach(async () => {
-    vault = new Vault(':memory:', 'test-master-key');
+    vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -570,7 +570,7 @@ describe('Performance Benchmarks', () => {
   let session: string;
 
   beforeEach(async () => {
-    vault = new Vault(':memory:', 'test-master-key');
+    vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();

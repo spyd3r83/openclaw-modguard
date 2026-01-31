@@ -1,14 +1,19 @@
 import { DetectionResult, Pattern, PatternCategory } from './types.js';
 import { getPatterns, allPatterns } from './patterns/index.js';
+import { VaultError } from './errors.js';
 
 export interface DetectorOptions {
   categories?: PatternCategory[];
   minConfidence?: number;
+  maxInputLength?: number;
 }
+
+const DEFAULT_MAX_INPUT_LENGTH = 1_048_576;
 
 export class Detector {
   private patterns: Pattern[];
   private minConfidence: number;
+  private maxInputLength: number;
   private regexCache: Map<Pattern, RegExp>;
 
   constructor(options?: DetectorOptions) {
@@ -17,6 +22,7 @@ export class Detector {
       : allPatterns;
 
     this.minConfidence = options?.minConfidence ?? 0;
+    this.maxInputLength = options?.maxInputLength ?? DEFAULT_MAX_INPUT_LENGTH;
 
     // Pre-compile regex patterns for performance
     this.regexCache = new Map();
@@ -26,6 +32,10 @@ export class Detector {
   }
 
   detect(text: string): DetectionResult[] {
+    if (text.length > this.maxInputLength) {
+      throw new VaultError('Input exceeds maximum allowed length', 'INPUT_TOO_LARGE');
+    }
+
     const results: DetectionResult[] = [];
     const seen = new Set<string>();
 

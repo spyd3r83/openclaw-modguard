@@ -1,10 +1,96 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { VaultError, EncryptionError, KeyDerivationError } from './errors.js';
 import { VaultAuditDetails } from './types.js';
 import { getGlobalAuditLogger } from './audit.js';
 import { secureZero, secureRandomBytes } from './security.js';
+
+const MAX_VAULT_PATH_LENGTH = 4096;
+const ALLOWED_VAULT_BASES = [
+  path.join(process.env.HOME || process.cwd(), '.openclaw/guard'),
+  ':memory:'
+];
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+class RateLimiter {
+  private requests: Map<string, RateLimitEntry>;
+
+  constructor(
+    private maxRequests: number,
+    private windowMs: number
+  ) {
+    this.requests = new Map();
+  }
+
+  allow(key: string): boolean {
+    const now = Date.now();
+    const entry = this.requests.get(key);
+
+    if (!entry || now > entry.resetTime) {
+      this.requests.set(key, { count: 1, resetTime: now + this.windowMs });
+      return true;
+    }
+
+    if (entry.count >= this.maxRequests) {
+      return false;
+    }
+
+    entry.count++;
+    return true;
+  }
+
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.requests.entries()) {
+      if (now > entry.resetTime) {
+        this.requests.delete(key);
+      }
+    }
+  }
+}
+
+function validateVaultPath(vaultPath: string): void {
+  if (!vaultPath || typeof vaultPath !== 'string') {
+    throw new VaultError('vaultPath must be a non-empty string', 'INVALID_PATH');
+  }
+
+  if (vaultPath.length > MAX_VAULT_PATH_LENGTH) {
+    throw new VaultError('vaultPath exceeds maximum length', 'INVALID_PATH');
+  }
+
+  if (vaultPath !== ':memory:') {
+    const absolutePath = path.resolve(vaultPath);
+
+    if (absolutePath.includes('..')) {
+      throw new VaultError('vaultPath cannot contain path traversal sequences', 'INVALID_PATH');
+    }
+
+    if (absolutePath.includes('~') && !absolutePath.startsWith(process.env.HOME || '')) {
+      throw new VaultError('vaultPath cannot contain tilde outside home directory', 'INVALID_PATH');
+    }
+
+    const isAllowed = ALLOWED_VAULT_BASES.some(base =>
+      absolutePath === base || absolutePath.startsWith(base + path.sep)
+    );
+
+    if (!isAllowed) {
+      throw new VaultError('vaultPath must be within allowed directories', 'INVALID_PATH');
+    }
+
+    const parentDir = path.dirname(absolutePath);
+    try {
+      fs.accessSync(parentDir, fs.constants.W_OK);
+    } catch {
+      throw new VaultError(`Cannot write to vault directory: ${parentDir}`, 'PATH_NOT_WRITABLE');
+    }
+  }
+}
 
 
 interface VaultEntry {
@@ -14,6 +100,7 @@ interface VaultEntry {
   encrypted_value: Buffer;
   iv: Buffer;
   auth_tag: Buffer;
+  salt: Buffer;
   created_at: number;
   expires_at: number | null;
 }
@@ -27,11 +114,22 @@ export class Vault {
   private masterKey: string;
   private vaultPath: string;
   private currentSessionId: string;
+  private retrieveLimiter: RateLimiter;
+  private storeLimiter: RateLimiter;
 
   constructor(vaultPath: string, masterKey: string) {
+    validateVaultPath(vaultPath);
+
+    if (!masterKey || masterKey.length < 64) {
+      throw new VaultError('Master key must be at least 32 bytes (64 hex chars)', 'INVALID_KEY');
+    }
+
     this.vaultPath = vaultPath;
     this.masterKey = masterKey;
     this.currentSessionId = 'default';
+
+    this.retrieveLimiter = new RateLimiter(100, 60000);
+    this.storeLimiter = new RateLimiter(1000, 60000);
 
     this.db = new Database(vaultPath);
 
@@ -62,6 +160,7 @@ export class Vault {
         encrypted_value BLOB NOT NULL,
         iv BLOB NOT NULL,
         auth_tag BLOB NOT NULL,
+        salt BLOB NOT NULL,
         created_at INTEGER NOT NULL,
         expires_at INTEGER
       )
@@ -177,6 +276,11 @@ export class Vault {
   async store(token: string, category: string, value: string, options?: StoreOptions): Promise<number> {
     const startTime = Date.now();
 
+    const limiterKey = `store:${category}`;
+    if (!this.storeLimiter.allow(limiterKey)) {
+      throw new VaultError('Rate limit exceeded for store operations', 'RATE_LIMIT_EXCEEDED');
+    }
+
     const salt = secureRandomBytes(32);
     try {
       const key = await this.deriveKey(this.masterKey, salt);
@@ -187,11 +291,11 @@ export class Vault {
       const expiresAt = options?.ttl ? now + options.ttl : null;
 
       const stmt = this.db.prepare(`
-        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      const result = stmt.run(token, category, encrypted, iv, authTag, now, expiresAt);
+      const result = stmt.run(token, category, encrypted, iv, authTag, salt, now, expiresAt);
 
       const elapsed = Date.now() - startTime;
 
@@ -222,8 +326,13 @@ export class Vault {
   async retrieve(token: string, category: string): Promise<string | null> {
     const startTime = Date.now();
 
+    const limiterKey = `retrieve:${token}`;
+    if (!this.retrieveLimiter.allow(limiterKey)) {
+      throw new VaultError('Rate limit exceeded for retrieve operations', 'RATE_LIMIT_EXCEEDED');
+    }
+
     const row = this.db.prepare(`
-      SELECT encrypted_value, iv, auth_tag, expires_at
+      SELECT encrypted_value, iv, auth_tag, salt, expires_at
       FROM entries
       WHERE token = ? AND category = ? AND (expires_at IS NULL OR expires_at > ?)
       ORDER BY created_at DESC
@@ -251,9 +360,8 @@ export class Vault {
       return null;
     }
 
-    const salt = secureRandomBytes(32);
     try {
-      const key = await this.deriveKey(this.masterKey, salt);
+      const key = await this.deriveKey(this.masterKey, row.salt);
 
       const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
 
@@ -276,9 +384,26 @@ export class Vault {
       }
 
       return result;
-    } finally {
-      // Zero out salt after use
-      secureZero(salt);
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      const auditLogger = getGlobalAuditLogger();
+      if (auditLogger) {
+        const details: VaultAuditDetails = {
+          vaultOperation: 'retrieve',
+          category,
+          found: true,
+          reason: 'decryption_failed'
+        };
+        void auditLogger.log({
+          operation: 'vault_retrieve',
+          sessionId: this.currentSessionId,
+          level: 'error',
+          success: false,
+          duration: elapsed,
+          details
+        });
+      }
+      throw new EncryptionError('Failed to decrypt vault entry', { error });
     }
   }
 

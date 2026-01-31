@@ -6,7 +6,7 @@ import { Database } from 'better-sqlite3';
 
 describe('CLI Commands', () => {
   const testVaultPath = '/tmp/test-cli-vault.db';
-  const testMasterKey = 'test-master-key-123456';
+  const testMasterKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
   beforeEach(() => {
     if (fs.existsSync(testVaultPath)) {
@@ -335,7 +335,7 @@ function execCLI(args: string[]): { stdout: string; stderr: string; status: numb
       env: {
         ...process.env,
         GUARD_VAULT_PATH: '/tmp/test-cli-vault.db',
-        GUARD_MASTER_KEY: 'test-master-key-123456'
+        GUARD_MASTER_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
       }
     });
     return { stdout: stdout as string, stderr: '', status: 0 };

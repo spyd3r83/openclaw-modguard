@@ -30,6 +30,7 @@ describe('Vault Backup', () => {
         encrypted_value BLOB NOT NULL,
         iv BLOB NOT NULL,
         auth_tag BLOB NOT NULL,
+        salt BLOB NOT NULL,
         created_at INTEGER NOT NULL,
         expires_at INTEGER
       )
@@ -39,14 +40,14 @@ describe('Vault Backup', () => {
 
     // Insert test entries
     const stmt = db.prepare(`
-      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const now = Date.now();
-    stmt.run('EMAIL_12345678', 'email', Buffer.from('encrypted1'), Buffer.alloc(12, 1), Buffer.alloc(16, 2), now - 3600000, null);
-    stmt.run('PHONE_87654321', 'phone', Buffer.from('encrypted2'), Buffer.alloc(12, 3), Buffer.alloc(16, 4), now - 1800000, null);
-    stmt.run('SSN_abcdef12', 'ssn', Buffer.from('encrypted3'), Buffer.alloc(12, 5), Buffer.alloc(16, 6), now, now + 86400000);
+    stmt.run('EMAIL_12345678', 'email', Buffer.from('encrypted1'), Buffer.alloc(12, 1), Buffer.alloc(16, 2), Buffer.alloc(32, 7), now - 3600000, null);
+    stmt.run('PHONE_87654321', 'phone', Buffer.from('encrypted2'), Buffer.alloc(12, 3), Buffer.alloc(16, 4), Buffer.alloc(32, 8), now - 1800000, null);
+    stmt.run('SSN_abcdef12', 'ssn', Buffer.from('encrypted3'), Buffer.alloc(12, 5), Buffer.alloc(16, 6), Buffer.alloc(32, 9), now, now + 86400000);
 
     db.close();
   });
@@ -204,18 +205,19 @@ describe('Vault Backup', () => {
       // Add a new entry to the vault
       const db = new Database(vaultPath);
       db.prepare(`
-        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run('NEW_11111111', 'new', Buffer.from('new'), Buffer.alloc(12), Buffer.alloc(16), Date.now(), null);
+        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run('NEW_11111111', 'new', Buffer.from('new'), Buffer.alloc(12), Buffer.alloc(16), Buffer.alloc(32), Date.now(), null);
       db.close();
 
       // Restore with merge
       const result = await vaultRestore(backupPath, vaultPath, 'master-key', { merge: true });
 
       expect(result.success).toBe(true);
-      expect(result.conflictsResolved).toBe(3); // The 3 backup entries exist, so conflicts
+      expect(result.entriesRestored).toBe(0); // All entries already exist
+      expect(result.conflictsResolved).toBe(0); // No entries are newer
 
-      // Verify vault has 4 entries (3 from backup + 1 new)
+      // Verify vault has 4 entries (3 original + 1 new)
       const dbVerify = new Database(vaultPath, { readonly: true });
       const count = dbVerify.prepare('SELECT COUNT(*) as count FROM entries').get() as { count: number };
       dbVerify.close();

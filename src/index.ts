@@ -3,6 +3,7 @@ import { Detector } from './detector.js';
 import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
 import { registerGuardStatus } from './cli/status.js';
 import { registerGuardDetect } from './cli/detect.js';
+import { VaultError } from './errors.js';
 
 // Re-export security utilities
 export {
@@ -103,18 +104,35 @@ const guardPlugin = {
   description: 'Secure PII masking and vault storage plugin for OpenClaw',
   configSchema: {
     safeParse(value: unknown) {
-      const vaultPath = (value as any)?.vaultPath || ':memory:';
-      const masterKey = (value as any)?.masterKey || 'default-master-key';
+      if (typeof value !== 'object' || value === null) {
+        return { success: false, error: 'Config must be an object' };
+      }
 
-      if (!vaultPath || !masterKey) {
-        return { success: false, error: 'vaultPath and masterKey are required' };
+      const config = value as Record<string, unknown>;
+
+      const vaultPath = config.vaultPath;
+      if (typeof vaultPath !== 'string') {
+        return { success: false, error: 'vaultPath must be a string' };
+      }
+
+      const masterKey = config.masterKey;
+      if (typeof masterKey !== 'string') {
+        return { success: false, error: 'masterKey must be a string' };
+      }
+
+      const extraKeys = Object.keys(config).filter(k => k !== 'vaultPath' && k !== 'masterKey');
+      if (extraKeys.length > 0) {
+        return { success: false, error: `Unknown config properties: ${extraKeys.join(', ')}` };
       }
 
       try {
         initializeGuardState(vaultPath, masterKey);
-        return { success: true, data: value };
+        return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
-        return { success: false, error: `Failed to initialize guard: ${error}` };
+        if (error instanceof VaultError) {
+          return { success: false, error: error.message };
+        }
+        return { success: false, error: 'Failed to initialize guard' };
       }
     },
     jsonSchema: {

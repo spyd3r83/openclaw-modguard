@@ -18,6 +18,7 @@ export interface BackupEntry {
   encrypted_value: string; // base64 encoded
   iv: string; // base64 encoded
   auth_tag: string; // base64 encoded
+  salt: string; // base64 encoded
   created_at: number;
   expires_at: number | null;
 }
@@ -68,6 +69,7 @@ interface VaultEntry {
   encrypted_value: Buffer;
   iv: Buffer;
   auth_tag: Buffer;
+  salt: Buffer;
   created_at: number;
   expires_at: number | null;
 }
@@ -84,7 +86,7 @@ export async function vaultBackup(
   const db = new Database(vaultPath, { readonly: true });
 
   try {
-    let query = 'SELECT id, token, category, encrypted_value, iv, auth_tag, created_at, expires_at FROM entries';
+    let query = 'SELECT id, token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at FROM entries';
     const params: number[] = [];
 
     if (options.incremental && options.lastBackupTimestamp) {
@@ -103,6 +105,7 @@ export async function vaultBackup(
       encrypted_value: entry.encrypted_value.toString('base64'),
       iv: entry.iv.toString('base64'),
       auth_tag: entry.auth_tag.toString('base64'),
+      salt: entry.salt.toString('base64'),
       created_at: entry.created_at,
       expires_at: entry.expires_at
     }));
@@ -285,6 +288,7 @@ export async function vaultRestore(
         encrypted_value BLOB NOT NULL,
         iv BLOB NOT NULL,
         auth_tag BLOB NOT NULL,
+        salt BLOB NOT NULL,
         created_at INTEGER NOT NULL,
         expires_at INTEGER
       )
@@ -302,8 +306,8 @@ export async function vaultRestore(
     let conflictsResolved = 0;
 
     const insertStmt = db.prepare(`
-      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const checkExistsStmt = db.prepare(
@@ -311,7 +315,7 @@ export async function vaultRestore(
     );
 
     const updateStmt = db.prepare(`
-      UPDATE entries SET encrypted_value = ?, iv = ?, auth_tag = ?, created_at = ?, expires_at = ?
+      UPDATE entries SET encrypted_value = ?, iv = ?, auth_tag = ?, salt = ?, created_at = ?, expires_at = ?
       WHERE token = ? AND category = ?
     `);
 
@@ -328,6 +332,7 @@ export async function vaultRestore(
               Buffer.from(entry.encrypted_value, 'base64'),
               Buffer.from(entry.iv, 'base64'),
               Buffer.from(entry.auth_tag, 'base64'),
+              Buffer.from(entry.salt, 'base64'),
               entry.created_at,
               entry.expires_at,
               entry.token,
@@ -342,6 +347,7 @@ export async function vaultRestore(
             Buffer.from(entry.encrypted_value, 'base64'),
             Buffer.from(entry.iv, 'base64'),
             Buffer.from(entry.auth_tag, 'base64'),
+            Buffer.from(entry.salt, 'base64'),
             entry.created_at,
             entry.expires_at
           );

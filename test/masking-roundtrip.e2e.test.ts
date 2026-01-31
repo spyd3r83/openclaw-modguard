@@ -10,7 +10,7 @@ describe('Masking Round-trip E2E', () => {
   beforeEach(async () => {
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'roundtrip-e2e-'));
     process.env.GUARD_VAULT_PATH = path.join(testDir, 'vault.db');
-    process.env.GUARD_MASTER_KEY = 'test-key-' + Date.now();
+    process.env.GUARD_MASTER_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   });
 
   afterEach(async () => {
