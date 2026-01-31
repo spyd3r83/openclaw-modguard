@@ -304,3 +304,31 @@ If missing, run `pnpm build`.
 ## Bug Tracking
 
 See `bugs.md` for known issues and their status.
+
+## Current Status (2026-01-31)
+
+### Test Results
+- **454 passing / 61 failing** (515 total)
+- Performance tests: All pass after caching key derivation
+- Vault tests: All 16 pass
+- Tokenizer tests: All 169 pass
+
+### Remaining Work
+1. **BUG-014**: Streaming cross-chunk pattern detection (19 tests failing)
+2. **BUG-010**: Detector accuracy thresholds (18 tests failing)
+3. **WARN-001**: Plugin ID mismatch warning (cosmetic)
+
+### Performance
+- Key derivation: ~100ms (one-time at startup)
+- Single tokenize/detokenize: ~1-7ms
+- Batch of 1000: ~300ms
+
+### Dev Environment
+```bash
+# Start dev gateway (requires OPENCLAW_DIR)
+export OPENCLAW_DIR=/path/to/openclaw
+cd dev && ./setup.sh
+
+# Verify plugin registered
+docker compose logs openclaw-gateway | grep "ModGuard plugin registered"
+```
