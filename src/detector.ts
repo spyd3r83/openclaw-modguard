@@ -9,13 +9,20 @@ export interface DetectorOptions {
 export class Detector {
   private patterns: Pattern[];
   private minConfidence: number;
+  private regexCache: Map<Pattern, RegExp>;
 
   constructor(options?: DetectorOptions) {
     this.patterns = options?.categories
       ? getPatterns().filter((p) => options.categories!.includes(p.category))
       : allPatterns;
-    
+
     this.minConfidence = options?.minConfidence ?? 0;
+
+    // Pre-compile regex patterns for performance
+    this.regexCache = new Map();
+    for (const pattern of this.patterns) {
+      this.regexCache.set(pattern, new RegExp(pattern.regex.source, pattern.regex.flags));
+    }
   }
 
   detect(text: string): DetectionResult[] {
@@ -23,7 +30,9 @@ export class Detector {
     const seen = new Set<string>();
 
     for (const pattern of this.patterns) {
-      const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
+      // Use cached regex and reset lastIndex for global patterns
+      const regex = this.regexCache.get(pattern)!;
+      regex.lastIndex = 0;
       let match;
 
       while ((match = regex.exec(text)) !== null) {
@@ -71,5 +80,10 @@ export class Detector {
 
   updatePatterns(patterns: Pattern[]): void {
     this.patterns = patterns;
+    // Rebuild regex cache for new patterns
+    this.regexCache.clear();
+    for (const pattern of this.patterns) {
+      this.regexCache.set(pattern, new RegExp(pattern.regex.source, pattern.regex.flags));
+    }
   }
 }

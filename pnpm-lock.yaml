@@ -12,7 +12,7 @@ importers:
         specifier: ^11.0.0
         version: 11.10.0
       openclaw:
-        specifier: '>=2026.1.26'
+        specifier: '>=2026.1.29'
         version: 2026.1.29(@types/express@5.0.6)(devtools-protocol@0.0.1577676)(typescript@5.9.3)
       yargs:
         specifier: ^17.7.0

@@ -8,6 +8,7 @@ import { PatternType } from '../types.js';
 import { OutputFormat, OutputFormatter, FormattableData } from './formatter.js';
 import { registerAuditCommands } from './audit.js';
 import { initializeGlobalAuditLogger, getGlobalAuditLogger } from '../audit.js';
+import { vaultBackup, vaultRestore, vaultRepair, verifyBackup } from '../backup.js';
 import * as fs from 'node:fs/promises';
 
 const yargs: any = (yargsModule as any).default;
@@ -140,6 +141,64 @@ const argv = yargs(hideBin(process.argv))
           })
           .example('$0 vault prune --dry-run', 'Show what would be pruned without deleting');
       }, handleVaultPrune)
+      .command('backup', 'Create a backup of the vault database', (yargs) => {
+        return yargs
+          .option('output', {
+            alias: 'o',
+            type: 'string',
+            description: 'Output file path (defaults to vault-backup-<timestamp>.jsonl)'
+          })
+          .option('incremental', {
+            alias: 'i',
+            type: 'boolean',
+            default: false,
+            description: 'Create incremental backup (only new entries since last backup)'
+          })
+          .option('since', {
+            type: 'string',
+            description: 'For incremental: timestamp or ISO date for entries after this time'
+          })
+          .example('$0 vault backup --output backup.jsonl', 'Create full backup')
+          .example('$0 vault backup --incremental --since 2024-01-01', 'Create incremental backup');
+      }, handleVaultBackup)
+      .command('restore <backup-file>', 'Restore vault from backup', (yargs) => {
+        return yargs
+          .positional('backup-file', {
+            type: 'string',
+            description: 'Path to backup file'
+          })
+          .option('force', {
+            alias: 'f',
+            type: 'boolean',
+            default: false,
+            description: 'Overwrite existing vault'
+          })
+          .option('merge', {
+            alias: 'm',
+            type: 'boolean',
+            default: false,
+            description: 'Merge with existing vault (keep newer on conflicts)'
+          })
+          .example('$0 vault restore backup.jsonl --force', 'Restore and overwrite existing vault')
+          .example('$0 vault restore backup.jsonl --merge', 'Merge backup with existing vault');
+      }, handleVaultRestore)
+      .command('repair', 'Repair corrupted vault database', (yargs) => {
+        return yargs
+          .option('backup', {
+            alias: 'b',
+            type: 'boolean',
+            default: true,
+            description: 'Create backup before repair'
+          })
+          .option('force', {
+            alias: 'f',
+            type: 'boolean',
+            default: false,
+            description: 'Skip confirmation prompt'
+          })
+          .example('$0 vault repair', 'Repair vault with automatic backup')
+          .example('$0 vault repair --no-backup --force', 'Repair without backup or confirmation');
+      }, handleVaultRepair)
       .demandCommand(1, 'Please specify a vault command');
   })
   .demandCommand(1, 'Please specify a command')
@@ -810,4 +869,292 @@ function formatBytes(bytes: number): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+async function handleVaultBackup(args: any): Promise<void> {
+  const startTime = Date.now();
+  const sessionId = 'cli-vault-backup-' + Date.now();
+
+  try {
+    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
+
+    // Generate default output path if not specified
+    const outputPath = args.output || `vault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
+
+    // Parse since timestamp if provided
+    let lastBackupTimestamp: number | undefined;
+    if (args.since) {
+      const parsed = Date.parse(args.since);
+      if (isNaN(parsed)) {
+        console.error(`Error: Invalid date format for --since: ${args.since}`);
+        process.exit(1);
+      }
+      lastBackupTimestamp = parsed;
+    }
+
+    console.log(`Creating ${args.incremental ? 'incremental' : 'full'} backup...`);
+
+    const result = await vaultBackup(vaultPath, outputPath, {
+      incremental: args.incremental,
+      lastBackupTimestamp
+    });
+
+    console.log('');
+    console.log('='.repeat(50));
+    console.log('Backup Complete');
+    console.log('='.repeat(50));
+    console.log(`Output: ${result.outputPath}`);
+    console.log(`Entries: ${result.entryCount}`);
+    console.log(`Size: ${formatBytes(result.size)}`);
+    console.log(`Duration: ${result.duration}ms`);
+    console.log(`Checksum: ${result.checksum.substring(0, 16)}...`);
+    console.log('='.repeat(50));
+
+    const elapsed = Date.now() - startTime;
+
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details: {
+          command: 'vault backup',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'error',
+        success: false,
+        duration: elapsed,
+        details: {
+          command: 'vault backup',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+    console.error(`Error creating backup: ${error}`);
+    process.exit(1);
+  }
+}
+
+async function handleVaultRestore(args: any): Promise<void> {
+  const startTime = Date.now();
+  const sessionId = 'cli-vault-restore-' + Date.now();
+
+  try {
+    const backupFile = args['backup-file'] as string;
+
+    if (!backupFile) {
+      console.error('Error: Backup file path is required');
+      process.exit(1);
+    }
+
+    // Verify backup exists
+    try {
+      await fs.access(backupFile);
+    } catch {
+      console.error(`Error: Backup file not found: ${backupFile}`);
+      process.exit(1);
+    }
+
+    // Verify backup integrity first
+    console.log('Verifying backup integrity...');
+    const verification = await verifyBackup(backupFile);
+
+    if (!verification.valid) {
+      console.error(`Error: Invalid backup file: ${verification.error}`);
+      process.exit(1);
+    }
+
+    console.log(`Backup verified: ${verification.entryCount} entries, version ${verification.metadata?.version}`);
+
+    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
+    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+
+    // Check if vault exists and warn
+    let vaultExists = true;
+    try {
+      await fs.access(vaultPath);
+    } catch {
+      vaultExists = false;
+    }
+
+    if (vaultExists && !args.force && !args.merge) {
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const answer = await new Promise<string>((resolve) => {
+        rl.question('Vault already exists. Overwrite (o), Merge (m), or Cancel (c)? ', (ans) => {
+          rl.close();
+          resolve(ans.toLowerCase());
+        });
+      });
+
+      if (answer === 'o' || answer === 'overwrite') {
+        args.force = true;
+      } else if (answer === 'm' || answer === 'merge') {
+        args.merge = true;
+      } else {
+        console.log('Restore cancelled.');
+        return;
+      }
+    }
+
+    console.log(`Restoring vault${args.merge ? ' (merge mode)' : args.force ? ' (overwrite mode)' : ''}...`);
+
+    const result = await vaultRestore(backupFile, vaultPath, masterKey, {
+      force: args.force,
+      merge: args.merge
+    });
+
+    console.log('');
+    console.log('='.repeat(50));
+    console.log('Restore Complete');
+    console.log('='.repeat(50));
+    console.log(`Entries Restored: ${result.entriesRestored}`);
+    console.log(`Conflicts Resolved: ${result.conflictsResolved}`);
+    console.log(`Duration: ${result.duration}ms`);
+    console.log('='.repeat(50));
+
+    const elapsed = Date.now() - startTime;
+
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details: {
+          command: 'vault restore',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'error',
+        success: false,
+        duration: elapsed,
+        details: {
+          command: 'vault restore',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+    console.error(`Error restoring vault: ${error}`);
+    process.exit(1);
+  }
+}
+
+async function handleVaultRepair(args: any): Promise<void> {
+  const startTime = Date.now();
+  const sessionId = 'cli-vault-repair-' + Date.now();
+
+  try {
+    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
+    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+
+    // Confirm unless --force
+    if (!args.force) {
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const answer = await new Promise<string>((resolve) => {
+        rl.question('This will attempt to repair the vault database. Continue? (yes/no): ', (ans) => {
+          rl.close();
+          resolve(ans.toLowerCase());
+        });
+      });
+
+      if (answer !== 'yes' && answer !== 'y') {
+        console.log('Repair cancelled.');
+        return;
+      }
+    }
+
+    console.log('Repairing vault...');
+
+    const result = await vaultRepair(vaultPath, masterKey, {
+      backup: args.backup,
+      force: args.force
+    });
+
+    console.log('');
+    console.log('='.repeat(50));
+    console.log('Repair Complete');
+    console.log('='.repeat(50));
+    console.log(`Entries Repaired: ${result.entriesRepaired}`);
+    console.log(`Entries Deleted: ${result.entriesDeleted}`);
+    console.log(`Unrecoverable: ${result.entriesUnrecoverable}`);
+    console.log(`Duration: ${result.duration}ms`);
+    console.log('='.repeat(50));
+
+    if (result.entriesUnrecoverable > 0) {
+      console.warn(`\nWarning: ${result.entriesUnrecoverable} entries could not be recovered and were deleted.`);
+    }
+
+    const elapsed = Date.now() - startTime;
+
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details: {
+          command: 'vault repair',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    const logger = getGlobalAuditLogger();
+    if (logger) {
+      void logger.log({
+        operation: 'cli',
+        sessionId,
+        level: 'error',
+        success: false,
+        duration: elapsed,
+        details: {
+          command: 'vault repair',
+          args: sanitizeArgs(args),
+          sanitized: true
+        }
+      });
+    }
+    console.error(`Error repairing vault: ${error}`);
+    process.exit(1);
+  }
 }

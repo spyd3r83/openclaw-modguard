@@ -3,6 +3,7 @@ import { Vault } from './vault.js';
 import { PatternType, PatternCategory, MaskAuditDetails, UnmaskAuditDetails } from './types.js';
 import { TokenizationError, DetokenizationError, InvalidTokenError } from './errors.js';
 import { getGlobalAuditLogger } from './audit.js';
+import { secureZero, secureRandomBytes } from './security.js';
 
 export type SessionId = string;
 export type Token = `${Uppercase<PatternType>}_${string}`;
@@ -37,9 +38,9 @@ export class Tokenizer {
   }
 
   generateSessionId(): SessionId {
-    const sessionId = crypto.randomBytes(16).toString('hex');
+    const sessionId = secureRandomBytes(16).toString('hex');
     const sessionKey: SessionKey = {
-      key: crypto.randomBytes(32),
+      key: secureRandomBytes(32),
       createdAt: Date.now()
     };
     this.sessionKeys.set(sessionId, sessionKey);
@@ -71,6 +72,9 @@ export class Tokenizer {
 
     const hexSuffix = hash.subarray(0, 4).toString('hex');
     const token = `${category.toUpperCase()}_${hexSuffix}` as Token;
+
+    // Zero out HMAC digest after extracting the token suffix
+    secureZero(hash);
 
     try {
       await this.vault.store(token, categoryType, value);
@@ -231,10 +235,17 @@ export class Tokenizer {
   }
 
   clearSession(session: SessionId): void {
+    const sessionKey = this.sessionKeys.get(session);
+    if (sessionKey) {
+      secureZero(sessionKey.key);
+    }
     this.sessionKeys.delete(session);
   }
 
   clearAllSessions(): void {
+    for (const sessionKey of this.sessionKeys.values()) {
+      secureZero(sessionKey.key);
+    }
     this.sessionKeys.clear();
   }
 }

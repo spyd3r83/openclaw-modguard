@@ -4,6 +4,48 @@ import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
 import { registerGuardStatus } from './cli/status.js';
 import { registerGuardDetect } from './cli/detect.js';
 
+// Re-export security utilities
+export {
+  secureZero,
+  secureZeroUint8Array,
+  timingSafeEqual,
+  timingSafeStringEqual,
+  secureRandomBytes,
+  secureRandomHex,
+  withSecureBuffer,
+  withTempSecureBuffer
+} from './security.js';
+
+// Re-export backup/restore functionality
+export {
+  vaultBackup,
+  vaultRestore,
+  vaultRepair,
+  verifyBackup,
+  type BackupMetadata,
+  type BackupEntry,
+  type BackupOptions,
+  type BackupResult,
+  type RestoreOptions,
+  type RestoreResult,
+  type RepairOptions,
+  type RepairResult,
+  type VerifyBackupResult
+} from './backup.js';
+
+// Re-export performance utilities
+export {
+  PerformanceMonitor,
+  calculateLatencyMetrics,
+  benchmark,
+  formatBenchmarkResult,
+  getGlobalPerformanceMonitor,
+  resetGlobalPerformanceMonitor,
+  type PerformanceMetrics,
+  type LatencyMetrics,
+  type BenchmarkResult
+} from './performance.js';
+
 interface OpenClawPluginApi {
   logger: {
     info(message: string): void;

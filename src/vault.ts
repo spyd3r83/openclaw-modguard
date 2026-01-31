@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { VaultError, EncryptionError, KeyDerivationError } from './errors.js';
 import { VaultAuditDetails } from './types.js';
 import { getGlobalAuditLogger } from './audit.js';
+import { secureZero, secureRandomBytes } from './security.js';
 
 
 interface VaultEntry {
@@ -116,7 +117,7 @@ export class Vault {
       const encoder = new TextEncoder();
       const data = encoder.encode(value);
 
-      const iv = crypto.randomBytes(12);
+      const iv = secureRandomBytes(12);
 
       const encrypted = await crypto.subtle.encrypt(
         {
@@ -173,41 +174,46 @@ export class Vault {
   async store(token: string, category: string, value: string, options?: StoreOptions): Promise<number> {
     const startTime = Date.now();
 
-    const salt = crypto.randomBytes(32);
-    const key = await this.deriveKey(this.masterKey, salt);
+    const salt = secureRandomBytes(32);
+    try {
+      const key = await this.deriveKey(this.masterKey, salt);
 
-    const { encrypted, iv, authTag } = await this.encrypt(value, key);
+      const { encrypted, iv, authTag } = await this.encrypt(value, key);
 
-    const now = Date.now();
-    const expiresAt = options?.ttl ? now + options.ttl : null;
+      const now = Date.now();
+      const expiresAt = options?.ttl ? now + options.ttl : null;
 
-    const stmt = this.db.prepare(`
-      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+      const stmt = this.db.prepare(`
+        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    const result = stmt.run(token, category, encrypted, iv, authTag, now, expiresAt);
+      const result = stmt.run(token, category, encrypted, iv, authTag, now, expiresAt);
 
-    const elapsed = Date.now() - startTime;
+      const elapsed = Date.now() - startTime;
 
-    const auditLogger = getGlobalAuditLogger();
-    if (auditLogger) {
-      const details: VaultAuditDetails = {
-        vaultOperation: 'store',
-        category,
-        entryCount: 1
-      };
-      void auditLogger.log({
-        operation: 'vault_store',
-        sessionId: this.currentSessionId,
-        level: 'info',
-        success: true,
-        duration: elapsed,
-        details
-      });
+      const auditLogger = getGlobalAuditLogger();
+      if (auditLogger) {
+        const details: VaultAuditDetails = {
+          vaultOperation: 'store',
+          category,
+          entryCount: 1
+        };
+        void auditLogger.log({
+          operation: 'vault_store',
+          sessionId: this.currentSessionId,
+          level: 'info',
+          success: true,
+          duration: elapsed,
+          details
+        });
+      }
+
+      return result.lastInsertRowid as number;
+    } finally {
+      // Zero out salt after use
+      secureZero(salt);
     }
-
-    return result.lastInsertRowid as number;
   }
 
   async retrieve(token: string, category: string): Promise<string | null> {
@@ -242,30 +248,35 @@ export class Vault {
       return null;
     }
 
-    const salt = crypto.randomBytes(32);
-    const key = await this.deriveKey(this.masterKey, salt);
+    const salt = secureRandomBytes(32);
+    try {
+      const key = await this.deriveKey(this.masterKey, salt);
 
-    const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
+      const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
 
-    const elapsed = Date.now() - startTime;
-    const auditLogger = getGlobalAuditLogger();
-    if (auditLogger) {
-      const details: VaultAuditDetails = {
-        vaultOperation: 'retrieve',
-        category,
-        found: true
-      };
-      void auditLogger.log({
-        operation: 'vault_retrieve',
-        sessionId: this.currentSessionId,
-        level: 'info',
-        success: true,
-        duration: elapsed,
-        details
-      });
+      const elapsed = Date.now() - startTime;
+      const auditLogger = getGlobalAuditLogger();
+      if (auditLogger) {
+        const details: VaultAuditDetails = {
+          vaultOperation: 'retrieve',
+          category,
+          found: true
+        };
+        void auditLogger.log({
+          operation: 'vault_retrieve',
+          sessionId: this.currentSessionId,
+          level: 'info',
+          success: true,
+          duration: elapsed,
+          details
+        });
+      }
+
+      return result;
+    } finally {
+      // Zero out salt after use
+      secureZero(salt);
     }
-
-    return result;
   }
 
   cleanupExpired(): number {
