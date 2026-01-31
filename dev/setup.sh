@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OpenClaw Guard Development Environment Setup
+# OpenClaw ModGuard Development Environment Setup
 # This creates an isolated dev instance mirroring production
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +30,7 @@ fi
 # Dev environment paths - completely separate from production
 export OPENCLAW_DEV_CONFIG_DIR="${OPENCLAW_DEV_CONFIG_DIR:-$PROJECT_ROOT/dev/.openclaw}"
 export OPENCLAW_DEV_WORKSPACE_DIR="${OPENCLAW_DEV_WORKSPACE_DIR:-$PROJECT_ROOT/dev/.openclaw/workspace}"
-export OPENCLAW_GUARD_PLUGIN_DIR="$PROJECT_ROOT"
+export OPENCLAW_MODGUARD_PLUGIN_DIR="$PROJECT_ROOT"
 
 # Use different ports than production (28xxx vs 18xxx)
 export OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-28789}"
@@ -48,15 +48,15 @@ if [[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
 fi
 export OPENCLAW_GATEWAY_TOKEN
 
-# Generate dev guard master key (32 bytes for AES-256)
-export GUARD_MASTER_KEY="${GUARD_MASTER_KEY:-$(openssl rand -hex 32)}"
+# Generate dev modguard master key (32 bytes for AES-256)
+export MODGUARD_MASTER_KEY="${MODGUARD_MASTER_KEY:-$(openssl rand -hex 32)}"
 
-echo "==> OpenClaw Guard Development Setup"
+echo "==> OpenClaw ModGuard Development Setup"
 echo ""
 echo "OpenClaw installation: $OPENCLAW_DIR"
 echo "Dev config: $OPENCLAW_DEV_CONFIG_DIR"
 echo "Dev workspace: $OPENCLAW_DEV_WORKSPACE_DIR"
-echo "Plugin source: $OPENCLAW_GUARD_PLUGIN_DIR"
+echo "Plugin source: $OPENCLAW_MODGUARD_PLUGIN_DIR"
 echo ""
 
 # Create dev directories
@@ -69,13 +69,13 @@ ENV_FILE="$SCRIPT_DIR/.env"
 cat > "$ENV_FILE" << EOF
 OPENCLAW_DEV_CONFIG_DIR=$OPENCLAW_DEV_CONFIG_DIR
 OPENCLAW_DEV_WORKSPACE_DIR=$OPENCLAW_DEV_WORKSPACE_DIR
-OPENCLAW_GUARD_PLUGIN_DIR=$OPENCLAW_GUARD_PLUGIN_DIR
+OPENCLAW_MODGUARD_PLUGIN_DIR=$OPENCLAW_MODGUARD_PLUGIN_DIR
 OPENCLAW_GATEWAY_PORT=$OPENCLAW_GATEWAY_PORT
 OPENCLAW_BRIDGE_PORT=$OPENCLAW_BRIDGE_PORT
 OPENCLAW_GATEWAY_BIND=$OPENCLAW_GATEWAY_BIND
 OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN
 OPENCLAW_IMAGE=$OPENCLAW_IMAGE
-GUARD_MASTER_KEY=$GUARD_MASTER_KEY
+MODGUARD_MASTER_KEY=$MODGUARD_MASTER_KEY
 EOF
 echo "==> Wrote environment to $ENV_FILE"
 
@@ -89,7 +89,7 @@ fi
 
 # Build the plugin first
 echo ""
-echo "==> Building openclaw-guard plugin"
+echo "==> Building openclaw-modguard plugin"
 cd "$PROJECT_ROOT"
 if [[ -f "pnpm-lock.yaml" ]]; then
   pnpm install --frozen-lockfile 2>/dev/null || pnpm install
@@ -107,7 +107,7 @@ if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
   docker build -t "$OPENCLAW_IMAGE" -f Dockerfile .
 fi
 
-# Create dev openclaw.json config with guard plugin enabled
+# Create dev openclaw.json config with modguard plugin enabled
 echo ""
 echo "==> Creating dev configuration"
 cat > "$OPENCLAW_DEV_CONFIG_DIR/openclaw.json" << EOF
@@ -170,14 +170,14 @@ cat > "$OPENCLAW_DEV_CONFIG_DIR/openclaw.json" << EOF
   "plugins": {
     "enabled": true,
     "load": {
-      "paths": ["/home/node/.openclaw/extensions/guard"]
+      "paths": ["/home/node/.openclaw/extensions/modguard"]
     },
     "entries": {
-      "guard": {
+      "modguard": {
         "enabled": true,
         "config": {
-          "vaultPath": "/home/node/.openclaw/guard/vault.db",
-          "masterKey": "\${GUARD_MASTER_KEY}"
+          "vaultPath": "/home/node/.openclaw/modguard/vault.db",
+          "masterKey": "\${MODGUARD_MASTER_KEY}"
         }
       }
     }
@@ -185,8 +185,8 @@ cat > "$OPENCLAW_DEV_CONFIG_DIR/openclaw.json" << EOF
 }
 EOF
 
-# Create guard data directory
-mkdir -p "$OPENCLAW_DEV_CONFIG_DIR/guard"
+# Create modguard data directory
+mkdir -p "$OPENCLAW_DEV_CONFIG_DIR/modguard"
 
 echo ""
 echo "==> Starting dev gateway"
@@ -195,7 +195,7 @@ docker compose up -d openclaw-gateway
 
 echo ""
 echo "=================================================="
-echo "OpenClaw Guard Dev Environment Ready"
+echo "OpenClaw ModGuard Dev Environment Ready"
 echo "=================================================="
 echo ""
 echo "Gateway: http://localhost:$OPENCLAW_GATEWAY_PORT"
@@ -205,7 +205,7 @@ echo ""
 echo "Commands:"
 echo "  docker compose -f $SCRIPT_DIR/docker-compose.yml logs -f openclaw-gateway"
 echo "  docker compose -f $SCRIPT_DIR/docker-compose.yml run --rm openclaw-cli plugins list"
-echo "  docker compose -f $SCRIPT_DIR/docker-compose.yml run --rm openclaw-cli guard status"
+echo "  docker compose -f $SCRIPT_DIR/docker-compose.yml run --rm openclaw-cli modguard status"
 echo ""
 echo "To stop:"
 echo "  docker compose -f $SCRIPT_DIR/docker-compose.yml down"

@@ -1,31 +1,15 @@
 # OpenClaw ModGuard
 
-<img src="images/modguardlogo.png" alt="OpenClaw ModGuard Logo" width="400">
-
 Standalone OpenClaw plugin for PII/Sensitive Data Masking.
 
 OpenClaw ModGuard protects sensitive information in AI agent conversations by detecting and masking PII, secrets, and network identifiers before they reach AI model, and unmasking them in responses back to users.
-
-## Example Use Cases:
-<img src="images/mask-PII.png" alt="OpenClaw ModGuard Logo">
 
 ## Quick Start
 
 ### 1. Install the Plugin
 
 ```bash
-# Clone and build
-git clone https://github.com/spyd3r83/openclaw-modguard.git
-cd openclaw-modguard
-pnpm install
-pnpm build
-
-# Set your OpenClaw directory
-export OPENCLAW_DIR=/path/to/your/openclaw
-
-# Copy to OpenClaw plugins
-mkdir -p $OPENCLAW_DIR/plugins/openclaw-modguard
-cp -r dist openclaw.plugin.json package.json node_modules $OPENCLAW_DIR/plugins/openclaw-modguard/
+openclaw plugins install openclaw-modguard
 ```
 
 ### 2. Configure

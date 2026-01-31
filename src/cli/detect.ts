@@ -24,7 +24,7 @@ interface DetectResult {
 
 export function registerModGuardDetect(api: OpenClawPluginApi): void {
   api.registerCommand({
-    name: 'guard-detect',
+    name: 'modguard-detect',
     description: 'Detect PII in text and show what tokens would be generated',
     handler: async (args) => {
       const text = args.text;

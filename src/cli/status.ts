@@ -33,8 +33,8 @@ interface ModGuardStatus {
 
 export function registerModGuardStatus(api: OpenClawPluginApi): void {
   api.registerCommand({
-    name: 'guard-status',
-    description: 'Check guard plugin status and statistics',
+    name: 'modguard-status',
+    description: 'Check modguard plugin status and statistics',
     handler: async (args) => {
       if (!isModGuardInitialized()) {
         return {

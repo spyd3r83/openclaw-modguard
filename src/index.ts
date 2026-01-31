@@ -1,8 +1,8 @@
 import { Vault } from './vault.js';
 import { Detector } from './detector.js';
 import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
-import { registerGuardStatus } from './cli/status.js';
-import { registerGuardDetect } from './cli/detect.js';
+import { registerModGuardStatus } from './cli/status.js';
+import { registerModGuardDetect } from './cli/detect.js';
 import { VaultError } from './errors.js';
 
 // Re-export security utilities
@@ -173,13 +173,13 @@ const guardPlugin = {
       }
 
       try {
-        initializeGuardState(vaultPath, masterKey);
+        initializeModGuardState(vaultPath, masterKey);
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
         if (error instanceof VaultError) {
           return { success: false, error: error.message };
         }
-        return { success: false, error: 'Failed to initialize guard' };
+        return { success: false, error: 'Failed to initialize modguard' };
       }
     },
     jsonSchema: {
@@ -197,40 +197,11 @@ const guardPlugin = {
       }
     }
   },
-  register(api: OpenClawPluginApi, config?: unknown): void {
-    apiRef = api;
-    console.log('[ModGuard] register() called');
+  register(api: OpenClawPluginApi): void {
     api.logger.info('OpenClaw ModGuard plugin registered');
-
-    // Initialize from environment variables (OpenClaw standard pattern)
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/home/node/.openclaw/modguard/vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY;
-    
-    console.log('[ModGuard] Env - MODGUARD_VAULT_PATH:', vaultPath);
-    console.log('[ModGuard] Env - MODGUARD_MASTER_KEY:', masterKey ? '[REDACTED]' : 'missing');
-    
-    if (masterKey) {
-      try {
-        console.log('[ModGuard] Initializing with vault:', vaultPath);
-        initializeModGuardState(vaultPath, masterKey);
-        console.log('[ModGuard] State initialized:', state.initialized);
-        
-        if (state.initialized) {
-          registerHooks(api, state);
-          api.logger.info('ModGuard hooks registered successfully');
-        }
-      } catch (error) {
-        api.logger.error(`ModGuard initialization failed: ${error}`);
-        console.error('[ModGuard] Init error:', error);
-      }
-    } else {
-      api.logger.warn('ModGuard not initialized - MODGUARD_MASTER_KEY environment variable not set');
-    }
 
     registerModGuardStatus(api);
     registerModGuardDetect(api);
-    
-    console.log('[ModGuard] Commands registered, state.initialized =', state.initialized);
   }
 };
 
