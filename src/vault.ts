@@ -9,7 +9,7 @@ import { secureZero, secureRandomBytes } from './security.js';
 
 const MAX_VAULT_PATH_LENGTH = 4096;
 const ALLOWED_VAULT_BASES = [
-  path.join(process.env.HOME || process.cwd(), '.openclaw/guard'),
+  path.join(process.env.HOME || process.cwd(), '.openclaw/modguard'),
   ':memory:'
 ];
 

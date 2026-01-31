@@ -1,6 +1,6 @@
 import { Detector } from '../detector.js';
 import type { DetectionResult } from '../types.js';
-import { getGuardState, isGuardInitialized } from '../index.js';
+import { getModGuardState, isModGuardInitialized } from '../index.js';
 
 interface OpenClawPluginApi {
   registerCommand(command: {
@@ -22,9 +22,9 @@ interface DetectResult {
   message: string;
 }
 
-export function registerGuardDetect(api: OpenClawPluginApi): void {
+export function registerModGuardDetect(api: OpenClawPluginApi): void {
   api.registerCommand({
-    name: 'guard-detect',
+    name: 'modguard-detect',
     description: 'Detect PII in text and show what tokens would be generated',
     handler: async (args) => {
       const text = args.text;
@@ -32,7 +32,7 @@ export function registerGuardDetect(api: OpenClawPluginApi): void {
       if (!text || typeof text !== 'string') {
         return {
           success: false,
-          error: 'Missing or invalid text argument. Usage: /guard-detect <text>',
+          error: 'Missing or invalid text argument. Usage: /modguard-detect <text>',
           output: ''
         };
       }
@@ -40,20 +40,20 @@ export function registerGuardDetect(api: OpenClawPluginApi): void {
       if (text.trim().length === 0) {
         return {
           success: false,
-          error: 'Text cannot be empty. Usage: /guard-detect <text>',
+          error: 'Text cannot be empty. Usage: /modguard-detect <text>',
           output: ''
         };
       }
 
-      if (!isGuardInitialized()) {
+      if (!isModGuardInitialized()) {
         return {
           success: false,
-          error: 'Guard plugin not initialized. Please configure vaultPath and masterKey.',
+          error: 'ModGuard plugin not initialized. Please configure vaultPath and masterKey.',
           output: ''
         };
       }
 
-      const state = getGuardState();
+      const state = getModGuardState();
 
       if (!state.detector) {
         return {

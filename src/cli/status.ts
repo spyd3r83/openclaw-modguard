@@ -1,4 +1,4 @@
-import { getGuardState, isGuardInitialized } from '../index.js';
+import { getModGuardState, isModGuardInitialized } from '../index.js';
 
 interface OpenClawPluginApi {
   logger: {
@@ -16,7 +16,7 @@ interface OpenClawPluginApi {
 }
 
 
-interface GuardStatus {
+interface ModGuardStatus {
   pluginActive: boolean;
   sessionCount: number;
   vaultEntryCount: number;
@@ -31,30 +31,30 @@ interface GuardStatus {
   };
 }
 
-export function registerGuardStatus(api: OpenClawPluginApi): void {
+export function registerModGuardStatus(api: OpenClawPluginApi): void {
   api.registerCommand({
-    name: 'guard-status',
-    description: 'Check guard plugin status and statistics',
+    name: 'modguard-status',
+    description: 'Check modguard plugin status and statistics',
     handler: async (args) => {
-      if (!isGuardInitialized()) {
+      if (!isModGuardInitialized()) {
         return {
           success: false,
-          error: 'Guard plugin not initialized. Please configure vaultPath and masterKey.',
+          error: 'ModGuard plugin not initialized. Please configure vaultPath and masterKey.',
           output: ''
         };
       }
 
-      const state = getGuardState();
+      const state = getModGuardState();
 
       if (!state.vault || !state.detector || !state.tokenizer) {
         return {
           success: false,
-          error: 'Guard plugin state is inconsistent',
+          error: 'ModGuard plugin state is inconsistent',
           output: ''
         };
       }
 
-      const status: GuardStatus = {
+      const status: ModGuardStatus = {
         pluginActive: true,
         sessionCount: 0,
         vaultEntryCount: 0,
@@ -79,11 +79,11 @@ export function registerGuardStatus(api: OpenClawPluginApi): void {
   });
 }
 
-function formatStatus(status: GuardStatus): string {
+function formatStatus(status: ModGuardStatus): string {
   const lines: string[] = [];
 
   lines.push('='.repeat(50));
-  lines.push('OpenClaw Guard Status');
+  lines.push('OpenClaw ModGuard Status');
   lines.push('='.repeat(50));
   lines.push('');
 

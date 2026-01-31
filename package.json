@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-guard",
+  "name": "openclaw-modguard",
   "version": "0.1.0",
   "type": "module",
   "description": "PII/Sensitive Data Masking Plugin for OpenClaw",
@@ -18,14 +18,14 @@
   "author": "James Ignacio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/spyd3r83/openclaw-guard.git"
+    "url": "https://github.com/spyd3r83/openclaw-modguard.git"
   },
   "bugs": {
-    "url": "https://github.com/spyd3r83/openclaw-guard/issues"
+    "url": "https://github.com/spyd3r83/openclaw-modguard/issues"
   },
-  "homepage": "https://github.com/spyd3r83/openclaw-guard#readme",
+  "homepage": "https://github.com/spyd3r83/openclaw-modguard#readme",
   "bin": {
-    "openclaw-guard": "./dist/cli/index.js"
+    "openclaw-modguard": "./dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -37,6 +37,7 @@
   },
   "files": [
     "dist",
+    "openclaw.plugin.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

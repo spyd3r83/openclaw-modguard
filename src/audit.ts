@@ -20,11 +20,11 @@ import {
   AuditRetentionPolicyError
 } from './errors.js';
 
-const DEFAULT_LOG_DIR = '.openclaw/guard';
+const DEFAULT_LOG_DIR = '.openclaw/modguard';
 const DEFAULT_LOG_FILE = 'audit.jsonl';
 const MAX_QUEUE_SIZE = 1000;
 const MAX_SEQUENCE_CACHE_SIZE = 10000;
-const DEFAULT_AUDIT_KEY = 'openclaw-guard-audit-key';
+const DEFAULT_AUDIT_KEY = 'openclaw-modguard-audit-key';
 
 interface WriteQueueItem {
   entry: AuditEntry;

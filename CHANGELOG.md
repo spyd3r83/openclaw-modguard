@@ -50,21 +50,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retention policy support
 
 #### CLI Commands
-- `openclaw guard vault list` - List vault entries
-- `openclaw guard vault lookup` - Look up specific token
-- `openclaw guard vault stats` - View vault statistics
-- `openclaw guard vault delete` - GDPR right to be forgotten
-- `openclaw guard vault export` - GDPR data portability
-- `openclaw guard vault prune` - Clean expired entries
-- `openclaw guard vault backup` - Create vault backup
-- `openclaw guard vault restore` - Restore from backup
-- `openclaw guard vault repair` - Repair corrupted vault
-- `openclaw guard audit query` - Query audit log
-- `openclaw guard audit stats` - View audit statistics
-- `openclaw guard audit verify` - Verify audit integrity
-- `openclaw guard audit tail` - Stream audit log
-- `openclaw guard detect` - Detect PII in text
-- `openclaw guard status` - Show plugin status
+- `openclaw modguard vault list` - List vault entries
+- `openclaw modguard vault lookup` - Look up specific token
+- `openclaw modguard vault stats` - View vault statistics
+- `openclaw modguard vault delete` - GDPR right to be forgotten
+- `openclaw modguard vault export` - GDPR data portability
+- `openclaw modguard vault prune` - Clean expired entries
+- `openclaw modguard vault backup` - Create vault backup
+- `openclaw modguard vault restore` - Restore from backup
+- `openclaw modguard vault repair` - Repair corrupted vault
+- `openclaw modguard audit query` - Query audit log
+- `openclaw modguard audit stats` - View audit statistics
+- `openclaw modguard audit verify` - Verify audit integrity
+- `openclaw modguard audit tail` - Stream audit log
+- `openclaw modguard detect` - Detect PII in text
+- `openclaw modguard status` - Show plugin status
 
 #### Security Hardening
 - Constant-time HMAC comparisons (timing attack prevention)
@@ -103,5 +103,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Troubleshooting guide
 - Pattern reference
 
-[Unreleased]: https://github.com/anomalyco/openclaw-guard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/anomalyco/openclaw-guard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/anomalyco/openclaw-modguard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/anomalyco/openclaw-modguard/releases/tag/v0.1.0

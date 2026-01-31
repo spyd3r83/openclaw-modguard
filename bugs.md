@@ -96,10 +96,10 @@ Changed to `./dist/index.js`.
 **Files:** `src/cli/status.ts`, `src/cli/detect.ts`
 
 **Description:**
-Commands were registered with names like `/guard-status` and `/guard-detect <text>`. OpenClaw requires command names to start with a letter and contain only letters, numbers, hyphens, and underscores.
+Commands were registered with names like `/modguard-status` and `/modguard-detect <text>`. OpenClaw requires command names to start with a letter and contain only letters, numbers, hyphens, and underscores.
 
 **Fix:**
-Changed to `guard-status` and `guard-detect` (no leading slash, no angle brackets).
+Changed to `modguard-status` and `modguard-detect` (no leading slash, no angle brackets).
 
 ---
 
@@ -347,13 +347,13 @@ Vault constructor uses synchronous `new Database()` and synchronous encryption o
 **Description:**
 OpenClaw logs repeated warnings:
 ```
-plugin guard: plugin id mismatch (manifest uses "guard", entry hints "openclaw-guard")
+plugin modguard: plugin id mismatch (manifest uses "modguard", entry hints "openclaw-modguard")
 ```
 
-This appears to be a warning about the package name (`openclaw-guard`) not matching the plugin ID (`guard`). It's cosmetic but noisy.
+This appears to be a warning about the package name (`openclaw-modguard`) not matching the plugin ID (`modguard`). It's cosmetic but noisy.
 
 **Potential fix:**
-Either rename the package to `@openclaw/guard` or update the manifest ID to match.
+Either rename the package to `@openclaw/modguard` or update the manifest ID to match.
 
 ---
 

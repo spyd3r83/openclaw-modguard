@@ -1,8 +1,8 @@
-# AGENTS.md - Development Guide for OpenClaw Guard
+# AGENTS.md - Development Guide for OpenClaw ModGuard
 
 ## Project Overview
 
-OpenClaw Guard is a PII/Sensitive Data Masking plugin for OpenClaw. It detects and masks sensitive information before it reaches AI models, storing encrypted values in a vault for reversible detokenization.
+OpenClaw ModGuard is a PII/Sensitive Data Masking plugin for OpenClaw. It detects and masks sensitive information before it reaches AI models, storing encrypted values in a vault for reversible detokenization.
 
 ## Core Constraints
 
@@ -56,7 +56,7 @@ openclaw-guard/
 ### openclaw.plugin.json (Critical)
 ```json
 {
-  "id": "guard",
+  "id": "modguard",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -90,8 +90,8 @@ openclaw-guard/
 ```typescript
 // src/index.ts
 const guardPlugin = {
-  id: 'guard',  // Must match openclaw.plugin.json
-  name: 'OpenClaw Guard',
+  id: 'modguard',  // Must match openclaw.plugin.json
+  name: 'OpenClaw ModGuard',
   version: '0.1.0',
   description: 'Secure PII masking plugin',
   configSchema: { /* ... */ },
@@ -111,12 +111,12 @@ export default guardPlugin;
 // - NO leading slash, NO angle brackets
 
 // WRONG:
-api.registerCommand({ name: '/guard-status', ... });
-api.registerCommand({ name: 'guard-detect <text>', ... });
+api.registerCommand({ name: '/modguard-status', ... });
+api.registerCommand({ name: 'modguard-detect <text>', ... });
 
 // CORRECT:
-api.registerCommand({ name: 'guard-status', ... });
-api.registerCommand({ name: 'guard-detect', ... });
+api.registerCommand({ name: 'modguard-status', ... });
+api.registerCommand({ name: 'modguard-detect', ... });
 ```
 
 ## Build Commands
@@ -167,9 +167,9 @@ if (vaultPath !== ':memory:') {
 ```
 
 ### Plugin ID Mismatch Warning
-OpenClaw warns: `plugin id mismatch (manifest uses "guard", entry hints "openclaw-guard")`
+OpenClaw warns: `plugin id mismatch (manifest uses "modguard", entry hints "openclaw-modguard")`
 
-This is cosmetic - the plugin loads correctly. To eliminate, either rename package to `@openclaw/guard` or accept the warning.
+This is cosmetic - the plugin loads correctly. To eliminate, either rename package to `@openclaw/modguard` or accept the warning.
 
 ## Code Style
 
@@ -270,12 +270,12 @@ src/
 
 ### Check if plugin loads
 ```bash
-docker compose -f dev/docker-compose.yml logs openclaw-gateway 2>&1 | grep -i guard
+docker compose -f dev/docker-compose.yml logs openclaw-gateway 2>&1 | grep -i modguard
 ```
 
 Expected output:
 ```
-OpenClaw Guard plugin registered
+OpenClaw ModGuard plugin registered
 ```
 
 ### Check for errors

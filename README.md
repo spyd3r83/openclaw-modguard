@@ -1,13 +1,13 @@
-# OpenClaw Guard
+# OpenClaw ModGuard
 
 Standalone OpenClaw plugin for PII/Sensitive Data Masking.
 
-OpenClaw Guard protects sensitive information in AI agent conversations by detecting and masking PII, secrets, and network identifiers before they reach the AI model, and unmasking them in responses back to users.
+OpenClaw ModGuard protects sensitive information in AI agent conversations by detecting and masking PII, secrets, and network identifiers before they reach AI model, and unmasking them in responses back to users.
 
 ## Quick Start
 
 ```bash
-openclaw plugins install openclaw-guard
+openclaw plugins install openclaw-modguard
 ```
 
 ## Features
@@ -27,7 +27,7 @@ openclaw plugins install openclaw-guard
 
 ```json
 {
-  "vaultPath": "~/.openclaw/guard/vault.db",
+  "vaultPath": "~/.openclaw/modguard/vault.db",
   "masterKey": "your-secure-master-key"
 }
 ```
@@ -36,8 +36,8 @@ openclaw plugins install openclaw-guard
 
 ```json
 {
-  "vaultPath": "~/.openclaw/guard/vault.db",
-  "masterKey": "${GUARD_MASTER_KEY}",
+  "vaultPath": "~/.openclaw/modguard/vault.db",
+  "masterKey": "${MODGUARD_MASTER_KEY}",
   "policy": {
     "failClosed": true,
     "rules": [
@@ -99,7 +99,7 @@ openclaw plugins install openclaw-guard
 │                        OpenClaw Agent                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│    User Input          OpenClaw Guard Plugin          Output    │
+ │    User Input          OpenClaw ModGuard Plugin          Output    │
 │         │                      │                         │      │
 │         ▼                      ▼                         │      │
 │    ┌─────────┐          ┌──────────────┐                 │      │
@@ -144,54 +144,54 @@ openclaw plugins install openclaw-guard
 
 ```bash
 # List vault entries
-openclaw guard vault list [--category email] [--limit 50]
+openclaw modguard vault list [--category email] [--limit 50]
 
 # Look up a specific token
-openclaw guard vault lookup EMAIL_12345678
+openclaw modguard vault lookup EMAIL_12345678
 
 # View vault statistics
-openclaw guard vault stats
+openclaw modguard vault stats
 
 # Delete entries (GDPR right to be forgotten)
-openclaw guard vault delete --contains "user@example.com"
+openclaw modguard vault delete --contains "user@example.com"
 
 # Export entries (GDPR data portability)
-openclaw guard vault export --contains "user@example.com" --output export.json
+openclaw modguard vault export --contains "user@example.com" --output export.json
 
 # Clean up expired entries
-openclaw guard vault prune
+openclaw modguard vault prune
 
 # Backup vault
-openclaw guard vault backup --output backup.jsonl
+openclaw modguard vault backup --output backup.jsonl
 
 # Restore from backup
-openclaw guard vault restore backup.jsonl --merge
+openclaw modguard vault restore backup.jsonl --merge
 
 # Repair corrupted vault
-openclaw guard vault repair
+openclaw modguard vault repair
 ```
 
 ### Detection
 
 ```bash
 # Detect PII in text
-openclaw guard detect "Contact me at john@example.com"
+openclaw modguard detect "Contact me at john@example.com"
 ```
 
 ### Audit Logging
 
 ```bash
 # Query audit log
-openclaw guard audit query --operation mask --limit 100
+openclaw modguard audit query --operation mask --limit 100
 
 # View audit statistics
-openclaw guard audit stats
+openclaw modguard audit stats
 
 # Verify audit log integrity
-openclaw guard audit verify
+openclaw modguard audit verify
 
 # Stream audit log (tail -f style)
-openclaw guard audit tail
+openclaw modguard audit tail
 ```
 
 ## Pattern Types
@@ -267,5 +267,5 @@ pnpm format
 
 ## Support
 
-- [GitHub Issues](https://github.com/spyd3r83/openclaw-guard/issues)
+- [GitHub Issues](https://github.com/spyd3r83/openclaw-modguard/issues)
 - [Documentation](docs/)

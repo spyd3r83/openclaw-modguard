@@ -1,8 +1,8 @@
 import { Vault } from './vault.js';
 import { Detector } from './detector.js';
 import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
-import { registerGuardStatus } from './cli/status.js';
-import { registerGuardDetect } from './cli/detect.js';
+import { registerModGuardStatus } from './cli/status.js';
+import { registerModGuardDetect } from './cli/detect.js';
 import { VaultError } from './errors.js';
 
 // Re-export security utilities
@@ -63,32 +63,32 @@ interface OpenClawPluginApi {
 }
 
 
-interface GuardState {
+interface ModGuardState {
   vault: Vault | null;
   detector: Detector | null;
   tokenizer: Tokenizer | null;
   initialized: boolean;
 }
 
-const state: GuardState = {
+const state: ModGuardState = {
   vault: null,
   detector: null,
   tokenizer: null,
   initialized: false
 };
 
-export function initializeGuardState(vaultPath: string, masterKey: string): void {
+export function initializeModGuardState(vaultPath: string, masterKey: string): void {
   state.vault = new Vault(vaultPath, masterKey);
   state.detector = new Detector();
   state.tokenizer = new Tokenizer(state.vault);
   state.initialized = true;
 }
 
-export function getGuardState(): GuardState {
+export function getModGuardState(): ModGuardState {
   return state;
 }
 
-export function isGuardInitialized(): boolean {
+export function isModGuardInitialized(): boolean {
   return state.initialized;
 }
 
@@ -98,8 +98,8 @@ export function isValidToken(token: unknown): token is import('./tokenizer.js').
 }
 
 const guardPlugin = {
-  id: 'guard',
-  name: 'OpenClaw Guard',
+  id: 'modguard',
+  name: 'OpenClaw ModGuard',
   version: '0.1.0',
   description: 'Secure PII masking and vault storage plugin for OpenClaw',
   configSchema: {
@@ -126,13 +126,13 @@ const guardPlugin = {
       }
 
       try {
-        initializeGuardState(vaultPath, masterKey);
+        initializeModGuardState(vaultPath, masterKey);
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
         if (error instanceof VaultError) {
           return { success: false, error: error.message };
         }
-        return { success: false, error: 'Failed to initialize guard' };
+        return { success: false, error: 'Failed to initialize modguard' };
       }
     },
     jsonSchema: {
@@ -151,10 +151,10 @@ const guardPlugin = {
     }
   },
   register(api: OpenClawPluginApi): void {
-    api.logger.info('OpenClaw Guard plugin registered');
+    api.logger.info('OpenClaw ModGuard plugin registered');
 
-    registerGuardStatus(api);
-    registerGuardDetect(api);
+    registerModGuardStatus(api);
+    registerModGuardDetect(api);
   }
 };
 

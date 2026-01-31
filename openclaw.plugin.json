@@ -1,5 +1,5 @@
 {
-  "id": "guard",
+  "id": "modguard",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

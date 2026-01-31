@@ -1,0 +1,50 @@
+# Source files (we include dist/)
+src/
+tsconfig.json
+tsconfig.*.json
+
+# Test files
+test/
+vitest.config.ts
+vitest.*.config.ts
+coverage/
+
+# Development
+dev/
+scripts/
+docker/
+
+# Documentation
+docs/
+reference/
+sprint/
+*.md
+!README.md
+!LICENSE
+
+# Git
+.git/
+.gitignore
+
+# Lockfile (not needed in published package)
+pnpm-lock.yaml
+
+# Debug files
+debug-*.mjs
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

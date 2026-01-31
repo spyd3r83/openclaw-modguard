@@ -27,7 +27,7 @@ interface VaultEntry {
 }
 
 const argv = yargs(hideBin(process.argv))
-  .scriptName('openclaw guard')
+  .scriptName('openclaw modguard')
   .command('audit', 'Audit log management', registerAuditCommands)
   .command('vault', 'Manage vault operations', (yargs: any) => {
     return yargs
@@ -212,8 +212,8 @@ async function handleVaultList(args: any): Promise<void> {
   const sessionId = 'cli-vault-list-' + Date.now();
 
   try {
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -342,8 +342,8 @@ async function handleVaultLookup(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -424,8 +424,8 @@ async function handleVaultStats(args: any): Promise<void> {
   const sessionId = 'cli-vault-stats-' + Date.now();
 
   try {
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -511,8 +511,8 @@ async function handleVaultPrune(args: any): Promise<void> {
   const sessionId = 'cli-vault-prune-' + Date.now();
 
   try {
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -630,8 +630,8 @@ async function handleVaultDelete(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -754,8 +754,8 @@ async function handleVaultExport(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -893,7 +893,7 @@ async function handleVaultBackup(args: any): Promise<void> {
   const sessionId = 'cli-vault-backup-' + Date.now();
 
   try {
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
 
     // Generate default output path if not specified
     const outputPath = args.output || `vault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
@@ -997,8 +997,8 @@ async function handleVaultRestore(args: any): Promise<void> {
 
     console.log(`Backup verified: ${verification.entryCount} entries, version ${verification.metadata?.version}`);
 
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     // Check if vault exists and warn
     let vaultExists = true;
@@ -1092,8 +1092,8 @@ async function handleVaultRepair(args: any): Promise<void> {
   const sessionId = 'cli-vault-repair-' + Date.now();
 
   try {
-    const vaultPath = process.env.GUARD_VAULT_PATH || '/tmp/openclaw-guard-vault.db';
-    const masterKey = process.env.GUARD_MASTER_KEY || 'default-master-key';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
     // Confirm unless --force
     if (!args.force) {

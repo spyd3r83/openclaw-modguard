@@ -9,7 +9,7 @@ services:
     volumes:
       - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
-      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
+      - ${OPENCLAW_MODGUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/modguard:ro
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-28789}:28789"
       - "${OPENCLAW_BRIDGE_PORT:-28790}:28790"
@@ -36,7 +36,7 @@ services:
     volumes:
       - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
-      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
+      - ${OPENCLAW_MODGUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/modguard:ro
     stdin_open: true
     tty: true
     init: true

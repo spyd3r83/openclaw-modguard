@@ -40,30 +40,30 @@ cd "$TEST_DIR"
 
 # Step 1: Verify package on npm
 step "Step 1: Verifying package on npm..."
-npm view openclaw-guard@${VERSION} || error "Package not found on npm"
+npm view openclaw-modguard@${VERSION} || error "Package not found on npm"
 success "Package found on npm"
 
 # Step 2: Install package
 step "Step 2: Installing package..."
 npm init -y > /dev/null 2>&1
-npm install openclaw-guard@${VERSION} || error "Failed to install package"
+npm install openclaw-modguard@${VERSION} || error "Failed to install package"
 success "Package installed"
 
 # Step 3: Check package contents
 step "Step 3: Checking package contents..."
-if [ -d "node_modules/openclaw-guard/dist" ]; then
+if [ -d "node_modules/openclaw-modguard/dist" ]; then
   success "dist/ directory present"
 else
   error "dist/ directory missing"
 fi
 
-if [ -f "node_modules/openclaw-guard/README.md" ]; then
+if [ -f "node_modules/openclaw-modguard/README.md" ]; then
   success "README.md present"
 else
   warn "README.md missing"
 fi
 
-if [ -f "node_modules/openclaw-guard/CHANGELOG.md" ]; then
+if [ -f "node_modules/openclaw-modguard/CHANGELOG.md" ]; then
   success "CHANGELOG.md present"
 else
   warn "CHANGELOG.md missing"
@@ -71,8 +71,8 @@ fi
 
 # Step 4: Test CLI (if available)
 step "Step 4: Testing CLI..."
-if [ -f "node_modules/.bin/openclaw-guard" ]; then
-  node_modules/.bin/openclaw-guard --help > /dev/null 2>&1 && success "CLI works" || warn "CLI help failed"
+if [ -f "node_modules/.bin/openclaw-modguard" ]; then
+  node_modules/.bin/openclaw-modguard --help > /dev/null 2>&1 && success "CLI works" || warn "CLI help failed"
 else
   warn "CLI binary not found"
 fi
@@ -80,7 +80,7 @@ fi
 # Step 5: Test module import
 step "Step 5: Testing module import..."
 cat > test-import.mjs << 'EOF'
-import { Detector } from 'openclaw-guard';
+import { Detector } from 'openclaw-modguard';
 
 const detector = new Detector();
 const results = detector.detect('test@example.com');
