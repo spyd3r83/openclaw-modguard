@@ -48,8 +48,8 @@ if [[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
 fi
 export OPENCLAW_GATEWAY_TOKEN
 
-# Generate dev guard master key
-export GUARD_MASTER_KEY="${GUARD_MASTER_KEY:-$(openssl rand -hex 16)}"
+# Generate dev guard master key (32 bytes for AES-256)
+export GUARD_MASTER_KEY="${GUARD_MASTER_KEY:-$(openssl rand -hex 32)}"
 
 echo "==> OpenClaw Guard Development Setup"
 echo ""
@@ -78,6 +78,14 @@ OPENCLAW_IMAGE=$OPENCLAW_IMAGE
 GUARD_MASTER_KEY=$GUARD_MASTER_KEY
 EOF
 echo "==> Wrote environment to $ENV_FILE"
+
+# Verify .env is ignored by git
+if git -C "$PROJECT_ROOT" check-ignore .env 2>/dev/null; then
+  echo "==> Verified .env is ignored by git"
+else
+  echo "==> WARNING: .env is NOT in .gitignore!"
+  echo "    This could expose secrets if committed to git."
+fi
 
 # Build the plugin first
 echo ""

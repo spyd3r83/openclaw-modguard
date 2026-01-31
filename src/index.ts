@@ -1,10 +1,9 @@
 import { Vault } from './vault.js';
 import { Detector } from './detector.js';
 import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
-import { registerModGuardStatus } from './cli/status.js';
-import { registerModGuardDetect } from './cli/detect.js';
+import { registerGuardStatus } from './cli/status.js';
+import { registerGuardDetect } from './cli/detect.js';
 import { VaultError } from './errors.js';
-import { registerHooks } from './hooks/index.js';
 
 // Re-export security utilities
 export {
@@ -152,8 +151,6 @@ const guardPlugin = {
   description: 'Secure PII masking and vault storage plugin for OpenClaw',
   configSchema: {
     safeParse(value: unknown) {
-      console.log('[ModGuard] safeParse called with:', JSON.stringify(value));
-      
       if (typeof value !== 'object' || value === null) {
         return { success: false, error: 'Config must be an object' };
       }
@@ -176,30 +173,13 @@ const guardPlugin = {
       }
 
       try {
-        console.log('[ModGuard] Initializing with vault:', vaultPath);
-        initializeModGuardState(vaultPath, masterKey);
-        console.log('[ModGuard] State initialized:', state.initialized);
-        
-        // Register hooks after successful initialization
-        if (apiRef) {
-          console.log('[ModGuard] apiRef exists, registering hooks');
-          if (state.initialized) {
-            registerHooks(apiRef, state);
-            apiRef.logger.info('ModGuard hooks registered successfully');
-          } else {
-            console.log('[ModGuard] State not initialized after initializeModGuardState');
-          }
-        } else {
-          console.log('[ModGuard] apiRef is null, deferring hook registration');
-        }
-        
+        initializeGuardState(vaultPath, masterKey);
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
-        console.error('[ModGuard] Initialization error:', error);
         if (error instanceof VaultError) {
           return { success: false, error: error.message };
         }
-        return { success: false, error: 'Failed to initialize modguard' };
+        return { success: false, error: 'Failed to initialize guard' };
       }
     },
     jsonSchema: {

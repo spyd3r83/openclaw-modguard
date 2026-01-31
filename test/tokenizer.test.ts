@@ -9,9 +9,8 @@ describe('Tokenizer', () => {
   let tokenizer: Tokenizer;
   let session: SessionId;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
-    await vault.ensureReady(); // Warm up key derivation before tests
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
   });
