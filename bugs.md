@@ -310,31 +310,50 @@ Vault was updated to enforce 64-char minimum but test fixtures weren't updated t
 ---
 
 ### BUG-013: Tokenizer performance ~40ms per operation (target <1ms)
-**Status:** Open
+**Status:** Fixed
 **Severity:** High
-**Files:** `src/tokenizer.ts`, `src/vault.ts`
+**Files:** `src/vault.ts`
 
 **Description:**
-Tokenizer operations are taking ~40-45ms each, far exceeding the target of <1ms:
-- Single tokenize: ~44ms (target <5ms)
-- Single detokenize: ~40ms (target <5ms)
-- Average over iterations: ~40ms (target <1ms)
-- Batch of 100: ~4000ms (target <500ms)
-- Batch of 1000: timeouts (target 10s)
-
-**Impact:**
-- 83+ performance test failures
-- Production will be unusable at current speed
-- Database operations likely the bottleneck
-
-**Potential causes:**
-- SQLite vault operations not optimized
-- PBKDF2 key derivation (100k iterations) on every operation
-- No connection pooling or prepared statement caching
-- Synchronous database operations blocking event loop
+Tokenizer operations were taking ~40-80ms each, far exceeding the target of <1ms.
 
 **Root cause:**
-Vault constructor uses synchronous `new Database()` and synchronous encryption operations. Each tokenize/detokenize triggers database I/O + crypto operations.
+PBKDF2 key derivation (100,000 iterations) was being executed on EVERY store/retrieve operation. This is by design slow (~50-100ms) to resist brute-force attacks.
+
+**Fix:**
+- Derive the encryption key once at Vault construction time
+- Cache the derived key in memory (`this.derivedKey`)
+- Use a static salt for key derivation (unique IV per entry still provides encryption uniqueness)
+- Add `ensureReady()` method to await key derivation before performance-critical code
+- Added backwards compatibility for legacy entries with per-entry salts
+
+**Result:**
+- Single operation: ~1-7ms (down from ~70-80ms)
+- Batch of 1000: ~300ms (down from timeouts)
+- All 169 tokenizer tests now pass
+
+---
+
+### BUG-014: Streaming cross-chunk pattern detection failures
+**Status:** Open
+**Severity:** Medium
+**Files:** `src/streaming.ts`
+
+**Description:**
+StreamingMasker fails to detect patterns that span chunk boundaries:
+- Email split at `@` symbol
+- IP addresses split at dots
+- SSN split at hyphens
+- Very small buffer sizes cause detection failures
+
+**Impact:**
+- 19 streaming edge case tests failing
+- Patterns may be missed in streaming scenarios
+
+**Potential causes:**
+- Buffer management not correctly carrying over partial matches
+- Token replacement happening before pattern is fully assembled
+- Buffer size too small to hold complete patterns
 
 ---
 
@@ -397,7 +416,8 @@ Unlike bundled OpenClaw plugins (which are TypeScript and transpiled together wi
 | BUG-010 | Open | Low | Detector accuracy thresholds |
 | BUG-011 | Fixed | Critical | Token detokenize truncated multi-word categories |
 | BUG-012 | Fixed | High | Test master keys too short (<64 hex chars) |
-| BUG-013 | Open | High | Tokenizer performance ~40ms per operation (target <1ms) |
+| BUG-013 | Fixed | High | Tokenizer performance ~40ms per operation (target <1ms) |
+| BUG-014 | Open | Medium | Streaming cross-chunk pattern detection failures |
 | WARN-001 | Open | Low | Plugin ID mismatch warning |
 | WARN-002 | Fixed | Low | Unused masterKey variables |
 

@@ -77,6 +77,7 @@ describe('StreamingMasker', () => {
 
   beforeEach(async () => {
     vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    await vault.ensureReady(); // Warm up key derivation
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -324,6 +325,7 @@ describe('StreamProcessor', () => {
 
   beforeEach(async () => {
     vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    await vault.ensureReady(); // Warm up key derivation
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -448,6 +450,7 @@ describe('Streaming Edge Cases', () => {
 
   beforeEach(async () => {
     vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    await vault.ensureReady(); // Warm up key derivation
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();
@@ -571,6 +574,7 @@ describe('Performance Benchmarks', () => {
 
   beforeEach(async () => {
     vault = new Vault(':memory:', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    await vault.ensureReady(); // Warm up key derivation
     detector = new Detector();
     tokenizer = new Tokenizer(vault);
     session = tokenizer.generateSessionId();

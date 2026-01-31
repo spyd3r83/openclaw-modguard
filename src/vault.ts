@@ -7,6 +7,9 @@ import { VaultAuditDetails } from './types.js';
 import { getGlobalAuditLogger } from './audit.js';
 import { secureZero, secureRandomBytes } from './security.js';
 
+// Web Crypto API types
+type CryptoKey = Awaited<ReturnType<typeof crypto.subtle.deriveKey>>;
+
 const MAX_VAULT_PATH_LENGTH = 4096;
 const ALLOWED_VAULT_BASES = [
   path.join(process.env.HOME || process.cwd(), '.openclaw/modguard'),
@@ -116,6 +119,9 @@ export class Vault {
   private currentSessionId: string;
   private retrieveLimiter: RateLimiter;
   private storeLimiter: RateLimiter;
+  private derivedKey: CryptoKey | null = null;
+  private keyDerivationPromise: Promise<CryptoKey> | null = null;
+  private static readonly KEY_SALT = Buffer.from('openclaw-modguard-v1-salt-do-not-change', 'utf8');
 
   constructor(vaultPath: string, masterKey: string) {
     validateVaultPath(vaultPath);
@@ -141,6 +147,64 @@ export class Vault {
     this.initializeDatabase();
 
     this.cleanupExpired();
+
+    // Start key derivation immediately (async, but don't block constructor)
+    this.keyDerivationPromise = this.deriveKeyOnce();
+  }
+
+  private async deriveKeyOnce(): Promise<CryptoKey> {
+    if (this.derivedKey) {
+      return this.derivedKey;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(this.masterKey),
+        'PBKDF2',
+        false,
+        ['deriveBits', 'deriveKey']
+      );
+
+      this.derivedKey = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt: Vault.KEY_SALT,
+          iterations: 100000,
+          hash: 'SHA-256'
+        },
+        keyMaterial,
+        {
+          name: 'AES-GCM',
+          length: 256
+        },
+        false,
+        ['encrypt', 'decrypt']
+      );
+
+      return this.derivedKey;
+    } catch (error) {
+      throw new KeyDerivationError('Failed to derive encryption key', { error });
+    }
+  }
+
+  private async getKey(): Promise<CryptoKey> {
+    if (this.derivedKey) {
+      return this.derivedKey;
+    }
+    if (this.keyDerivationPromise) {
+      return this.keyDerivationPromise;
+    }
+    return this.deriveKeyOnce();
+  }
+
+  /**
+   * Wait for key derivation to complete.
+   * Call this before performance-critical operations to avoid cold-start latency.
+   */
+  async ensureReady(): Promise<void> {
+    await this.getKey();
   }
 
   setSessionId(sessionId: string): void {
@@ -179,18 +243,19 @@ export class Vault {
     `);
   }
 
-  private async deriveKey(masterSecret: string, salt: Buffer) {
+  // Legacy method for backwards compatibility with entries that used per-entry salt
+  private async deriveKeyLegacy(salt: Buffer): Promise<CryptoKey> {
     try {
       const encoder = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
         'raw',
-        encoder.encode(masterSecret),
+        encoder.encode(this.masterKey),
         'PBKDF2',
         false,
         ['deriveBits', 'deriveKey']
       );
 
-      const derivedKey = await crypto.subtle.deriveKey(
+      return await crypto.subtle.deriveKey(
         {
           name: 'PBKDF2',
           salt: salt,
@@ -205,12 +270,8 @@ export class Vault {
         false,
         ['encrypt', 'decrypt']
       );
-
-      return derivedKey;
     } catch (error) {
-      throw new KeyDerivationError('Failed to derive encryption key', {
-        error
-      });
+      throw new KeyDerivationError('Failed to derive encryption key', { error });
     }
   }
 
@@ -281,46 +342,42 @@ export class Vault {
       throw new VaultError('Rate limit exceeded for store operations', 'RATE_LIMIT_EXCEEDED');
     }
 
-    const salt = secureRandomBytes(32);
-    try {
-      const key = await this.deriveKey(this.masterKey, salt);
+    // Use cached key (fast path)
+    const key = await this.getKey();
 
-      const { encrypted, iv, authTag } = await this.encrypt(value, key);
+    const { encrypted, iv, authTag } = await this.encrypt(value, key);
 
-      const now = Date.now();
-      const expiresAt = options?.ttl ? now + options.ttl : null;
+    const now = Date.now();
+    const expiresAt = options?.ttl ? now + options.ttl : null;
 
-      const stmt = this.db.prepare(`
-        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+    const stmt = this.db.prepare(`
+      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-      const result = stmt.run(token, category, encrypted, iv, authTag, salt, now, expiresAt);
+    // Store static salt marker to indicate cached key was used
+    const result = stmt.run(token, category, encrypted, iv, authTag, Vault.KEY_SALT, now, expiresAt);
 
-      const elapsed = Date.now() - startTime;
+    const elapsed = Date.now() - startTime;
 
-      const auditLogger = getGlobalAuditLogger();
-      if (auditLogger) {
-        const details: VaultAuditDetails = {
-          vaultOperation: 'store',
-          category,
-          entryCount: 1
-        };
-        void auditLogger.log({
-          operation: 'vault_store',
-          sessionId: this.currentSessionId,
-          level: 'info',
-          success: true,
-          duration: elapsed,
-          details
-        });
-      }
-
-      return result.lastInsertRowid as number;
-    } finally {
-      // Zero out salt after use
-      secureZero(salt);
+    const auditLogger = getGlobalAuditLogger();
+    if (auditLogger) {
+      const details: VaultAuditDetails = {
+        vaultOperation: 'store',
+        category,
+        entryCount: 1
+      };
+      void auditLogger.log({
+        operation: 'vault_store',
+        sessionId: this.currentSessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details
+      });
     }
+
+    return result.lastInsertRowid as number;
   }
 
   async retrieve(token: string, category: string): Promise<string | null> {
@@ -335,7 +392,7 @@ export class Vault {
       SELECT encrypted_value, iv, auth_tag, salt, expires_at
       FROM entries
       WHERE token = ? AND category = ? AND (expires_at IS NULL OR expires_at > ?)
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT 1
     `).get(token, category, Date.now()) as VaultEntry | undefined;
 
@@ -361,7 +418,11 @@ export class Vault {
     }
 
     try {
-      const key = await this.deriveKey(this.masterKey, row.salt);
+      // Use cached key if salt matches static salt, otherwise derive legacy key
+      const isStaticSalt = row.salt.equals(Vault.KEY_SALT);
+      const key = isStaticSalt
+        ? await this.getKey()
+        : await this.deriveKeyLegacy(row.salt);
 
       const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
 
