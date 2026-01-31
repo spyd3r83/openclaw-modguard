@@ -7,6 +7,9 @@ import { VaultAuditDetails } from './types.js';
 import { getGlobalAuditLogger } from './audit.js';
 import { secureZero, secureRandomBytes } from './security.js';
 
+// Web Crypto API types
+type CryptoKey = Awaited<ReturnType<typeof crypto.subtle.deriveKey>>;
+
 const MAX_VAULT_PATH_LENGTH = 4096;
 const ALLOWED_VAULT_BASES = [
   path.join(process.env.HOME || process.cwd(), '.openclaw/modguard'),
@@ -116,6 +119,9 @@ export class Vault {
   private currentSessionId: string;
   private retrieveLimiter: RateLimiter;
   private storeLimiter: RateLimiter;
+  private derivedKey: CryptoKey | null = null;
+  private keyDerivationPromise: Promise<CryptoKey> | null = null;
+  private static readonly KEY_SALT = Buffer.from('openclaw-modguard-v1-salt-do-not-change', 'utf8');
 
   constructor(vaultPath: string, masterKey: string) {
     validateVaultPath(vaultPath);
@@ -336,47 +342,6 @@ export class Vault {
       throw new VaultError('Rate limit exceeded for store operations', 'RATE_LIMIT_EXCEEDED');
     }
 
-    const salt = secureRandomBytes(32);
-    try {
-      const key = await this.deriveKey(this.masterKey, salt);
-
-      const { encrypted, iv, authTag } = await this.encrypt(value, key);
-
-      const now = Date.now();
-      const expiresAt = options?.ttl ? now + options.ttl : null;
-
-      const stmt = this.db.prepare(`
-        INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const result = stmt.run(token, category, encrypted, iv, authTag, salt, now, expiresAt);
-
-      const elapsed = Date.now() - startTime;
-
-      const auditLogger = getGlobalAuditLogger();
-      if (auditLogger) {
-        const details: VaultAuditDetails = {
-          vaultOperation: 'store',
-          category,
-          entryCount: 1
-        };
-        void auditLogger.log({
-          operation: 'vault_store',
-          sessionId: this.currentSessionId,
-          level: 'info',
-          success: true,
-          duration: elapsed,
-          details
-        });
-      }
-
-      return result.lastInsertRowid as number;
-    } finally {
-      // Zero out salt after use
-      secureZero(salt);
-    }
-
     // Use cached key (fast path)
     const key = await this.getKey();
 
@@ -453,7 +418,11 @@ export class Vault {
     }
 
     try {
-      const key = await this.deriveKey(this.masterKey, row.salt);
+      // Use cached key if salt matches static salt, otherwise derive legacy key
+      const isStaticSalt = row.salt.equals(Vault.KEY_SALT);
+      const key = isStaticSalt
+        ? await this.getKey()
+        : await this.deriveKeyLegacy(row.salt);
 
       const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
 
