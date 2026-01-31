@@ -33,7 +33,7 @@ interface GuardStatus {
 
 export function registerGuardStatus(api: OpenClawPluginApi): void {
   api.registerCommand({
-    name: '/guard-status',
+    name: 'guard-status',
     description: 'Check guard plugin status and statistics',
     handler: async (args) => {
       if (!isGuardInitialized()) {

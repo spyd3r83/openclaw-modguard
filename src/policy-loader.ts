@@ -48,7 +48,7 @@ export function validatePolicyConfig(config: unknown): config is PolicyConfig {
     }
 
     if (typedRule.conditions) {
-      typedRule.conditions.forEach((condition: unknown, condIndex: number) => {
+      (typedRule.conditions as unknown[]).forEach((condition: unknown, condIndex: number) => {
         if (!condition || typeof condition !== 'object' || Array.isArray(condition)) {
           throw new InvalidPolicyConfigError(`Condition at index ${condIndex} in rule at index ${index} must be an object`);
         }

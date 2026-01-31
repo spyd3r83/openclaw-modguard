@@ -1,0 +1,4 @@
+# Dev environment files (do not commit secrets)
+.env
+.openclaw/
+docker-compose.extra.yml

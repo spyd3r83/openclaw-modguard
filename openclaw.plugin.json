@@ -3,6 +3,15 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "vaultPath": {
+        "type": "string",
+        "description": "Path to vault database file (default: :memory:)"
+      },
+      "masterKey": {
+        "type": "string",
+        "description": "Master encryption key for vault"
+      }
+    }
   }
 }

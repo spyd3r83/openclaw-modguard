@@ -27,9 +27,9 @@ interface VaultEntry {
 const argv = yargs(hideBin(process.argv))
   .scriptName('openclaw guard')
   .command('audit', 'Audit log management', registerAuditCommands)
-  .command('vault', 'Manage vault operations', (yargs) => {
+  .command('vault', 'Manage vault operations', (yargs: any) => {
     return yargs
-      .command('list', 'List all vault entries', (yargs) => {
+      .command('list', 'List all vault entries', (yargs: any) => {
         return yargs
           .option('format', {
             alias: 'f',
@@ -62,7 +62,7 @@ const argv = yargs(hideBin(process.argv))
           .example('$0 vault list --format json --limit 100', 'List first 100 entries in JSON format')
           .example('$0 vault list --category email --older-than 7d', 'List email entries older than 7 days');
       }, handleVaultList)
-      .command('lookup <token>', 'Look up a specific token in vault', (yargs) => {
+      .command('lookup <token>', 'Look up a specific token in vault', (yargs: any) => {
         return yargs
           .positional('token', {
             type: 'string',
@@ -77,7 +77,7 @@ const argv = yargs(hideBin(process.argv))
           })
           .example('$0 vault lookup EMAIL_12345678', 'Look up token EMAIL_12345678');
       }, handleVaultLookup)
-      .command('stats', 'View vault statistics', (yargs) => {
+      .command('stats', 'View vault statistics', (yargs: any) => {
         return yargs
           .option('format', {
             alias: 'f',
@@ -87,7 +87,7 @@ const argv = yargs(hideBin(process.argv))
             description: 'Output format'
           });
       }, handleVaultStats)
-      .command('delete', 'Delete vault entries by value (GDPR right to be forgotten)', (yargs) => {
+      .command('delete', 'Delete vault entries by value (GDPR right to be forgotten)', (yargs: any) => {
         return yargs
           .option('contains', {
             alias: 'c',
@@ -103,7 +103,7 @@ const argv = yargs(hideBin(process.argv))
           })
           .example('$0 vault delete --contains "user@example.com"', 'Delete all entries containing "user@example.com"');
       }, handleVaultDelete)
-      .command('export', 'Export vault data by value (GDPR data portability)', (yargs) => {
+      .command('export', 'Export vault data by value (GDPR data portability)', (yargs: any) => {
         return yargs
           .option('contains', {
             alias: 'c',
@@ -125,7 +125,7 @@ const argv = yargs(hideBin(process.argv))
           })
           .example('$0 vault export --contains "user@example.com" --output export.json', 'Export entries containing "user@example.com" to export.json');
       }, handleVaultExport)
-      .command('prune', 'Clean up expired vault entries', (yargs) => {
+      .command('prune', 'Clean up expired vault entries', (yargs: any) => {
         return yargs
           .option('dry-run', {
             alias: 'd',
@@ -141,7 +141,7 @@ const argv = yargs(hideBin(process.argv))
           })
           .example('$0 vault prune --dry-run', 'Show what would be pruned without deleting');
       }, handleVaultPrune)
-      .command('backup', 'Create a backup of the vault database', (yargs) => {
+      .command('backup', 'Create a backup of the vault database', (yargs: any) => {
         return yargs
           .option('output', {
             alias: 'o',
@@ -161,7 +161,7 @@ const argv = yargs(hideBin(process.argv))
           .example('$0 vault backup --output backup.jsonl', 'Create full backup')
           .example('$0 vault backup --incremental --since 2024-01-01', 'Create incremental backup');
       }, handleVaultBackup)
-      .command('restore <backup-file>', 'Restore vault from backup', (yargs) => {
+      .command('restore <backup-file>', 'Restore vault from backup', (yargs: any) => {
         return yargs
           .positional('backup-file', {
             type: 'string',
@@ -182,7 +182,7 @@ const argv = yargs(hideBin(process.argv))
           .example('$0 vault restore backup.jsonl --force', 'Restore and overwrite existing vault')
           .example('$0 vault restore backup.jsonl --merge', 'Merge backup with existing vault');
       }, handleVaultRestore)
-      .command('repair', 'Repair corrupted vault database', (yargs) => {
+      .command('repair', 'Repair corrupted vault database', (yargs: any) => {
         return yargs
           .option('backup', {
             alias: 'b',

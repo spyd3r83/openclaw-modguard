@@ -35,7 +35,10 @@ export class Vault {
 
     this.db = new Database(vaultPath);
 
-    fs.chmodSync(vaultPath, 0o600);
+    // Skip chmod for in-memory databases
+    if (vaultPath !== ':memory:') {
+      fs.chmodSync(vaultPath, 0o600);
+    }
 
     this.initializeDatabase();
 

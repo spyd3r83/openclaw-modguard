@@ -1,0 +1,43 @@
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      GUARD_MASTER_KEY: ${GUARD_MASTER_KEY:-dev-guard-master-key-32bytes!}
+    volumes:
+      - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
+      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-28789}:28789"
+      - "${OPENCLAW_BRIDGE_PORT:-28790}:28790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "${OPENCLAW_GATEWAY_PORT:-28789}"
+      ]
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      BROWSER: echo
+      GUARD_MASTER_KEY: ${GUARD_MASTER_KEY:-dev-guard-master-key-32bytes!}
+    volumes:
+      - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
+      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]

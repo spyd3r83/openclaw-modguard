@@ -411,9 +411,9 @@ function getColorForEntry(entry: any): string {
 }
 
 export function registerAuditCommands(yargs: any): void {
-  yargs.command('audit', 'Audit log management', (yargs) => {
+  yargs.command('audit', 'Audit log management', (yargs: any) => {
     return yargs
-      .command('export', 'Export audit logs', (yargs) => {
+      .command('export', 'Export audit logs', (yargs: any) => {
         return yargs
           .option('start', {
             type: 'string',
@@ -449,7 +449,7 @@ export function registerAuditCommands(yargs: any): void {
           })
           .example('$0 audit export --start 2024-01-01 --end 2024-01-31 --format csv --output audit.csv', 'Export January 2024 logs to CSV');
       }, handleAuditExport)
-      .command('query', 'Query audit logs', (yargs) => {
+      .command('query', 'Query audit logs', (yargs: any) => {
         return yargs
           .option('session', {
             type: 'string',
@@ -491,7 +491,7 @@ export function registerAuditCommands(yargs: any): void {
           })
           .example('$0 audit query --session abc123 --limit 50', 'Query last 50 entries for session abc123');
       }, handleAuditQuery)
-      .command('stats', 'Show audit log statistics', (yargs) => {
+      .command('stats', 'Show audit log statistics', (yargs: any) => {
         return yargs
           .option('period', {
             type: 'string',
@@ -505,7 +505,7 @@ export function registerAuditCommands(yargs: any): void {
           })
           .example('$0 audit stats --period 24h', 'Show statistics for the last 24 hours');
       }, handleAuditStats)
-      .command('verify', 'Verify audit log integrity', (yargs) => {
+      .command('verify', 'Verify audit log integrity', (yargs: any) => {
         return yargs
           .option('start', {
             type: 'string',
@@ -517,7 +517,7 @@ export function registerAuditCommands(yargs: any): void {
           })
           .example('$0 audit verify --start 2024-01-01', 'Verify audit logs from 2024-01-01 onwards');
       }, handleAuditVerify)
-      .command('tail', 'Show recent audit log entries', (yargs) => {
+      .command('tail', 'Show recent audit log entries', (yargs: any) => {
         return yargs
           .option('count', {
             type: 'number',

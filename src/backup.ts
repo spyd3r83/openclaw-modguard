@@ -237,7 +237,7 @@ export async function verifyBackup(backupPath: string): Promise<VerifyBackupResu
 export async function vaultRestore(
   backupPath: string,
   vaultPath: string,
-  masterKey: string,
+  _masterKey: string,
   options: RestoreOptions = {}
 ): Promise<RestoreResult> {
   const startTime = Date.now();
@@ -365,7 +365,7 @@ export async function vaultRestore(
 
 export async function vaultRepair(
   vaultPath: string,
-  masterKey: string,
+  _masterKey: string,
   options: RepairOptions = {}
 ): Promise<RepairResult> {
   const startTime = Date.now();
@@ -469,7 +469,7 @@ export async function vaultRepair(
     transaction();
 
     // Run integrity check
-    const integrityCheck = db.pragma('integrity_check');
+    const integrityCheck = db.pragma('integrity_check') as { integrity_check: string }[];
     const isIntact = integrityCheck[0]?.integrity_check === 'ok';
 
     if (!isIntact) {

@@ -13,6 +13,7 @@ export interface PolicyContext {
   channel?: string;
   direction?: 'inbound' | 'outbound';
   confidence?: number;
+  originalContent?: string;
 }
 
 export interface PolicyDecision {
@@ -26,6 +27,7 @@ export interface PolicyDecision {
   cancel?: boolean;
   category?: string;
   confidence?: number;
+  matchedRule?: PolicyRule;
 }
 
 export interface PolicyCondition {
