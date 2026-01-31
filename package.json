@@ -15,15 +15,15 @@
     "encryption"
   ],
   "license": "MIT",
-  "author": "Anomaly Co",
+  "author": "James Ignacio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/openclaw-guard.git"
+    "url": "https://github.com/spyd3r83/openclaw-guard.git"
   },
   "bugs": {
-    "url": "https://github.com/anomalyco/openclaw-guard/issues"
+    "url": "https://github.com/spyd3r83/openclaw-guard/issues"
   },
-  "homepage": "https://github.com/anomalyco/openclaw-guard#readme",
+  "homepage": "https://github.com/spyd3r83/openclaw-guard#readme",
   "bin": {
     "openclaw-guard": "./dist/cli/index.js"
   },

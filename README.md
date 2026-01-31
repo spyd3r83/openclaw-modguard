@@ -267,5 +267,5 @@ pnpm format
 
 ## Support
 
-- [GitHub Issues](https://github.com/anomalyco/openclaw-guard/issues)
+- [GitHub Issues](https://github.com/spyd3r83/openclaw-guard/issues)
 - [Documentation](docs/)
