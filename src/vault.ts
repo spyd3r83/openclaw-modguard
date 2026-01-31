@@ -2,6 +2,9 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { VaultError, EncryptionError, KeyDerivationError } from './errors.js';
+import { VaultAuditDetails } from './types.js';
+import { getGlobalAuditLogger } from './audit.js';
+
 
 interface VaultEntry {
   id: number;
@@ -22,10 +25,12 @@ export class Vault {
   private db: Database.Database;
   private masterKey: string;
   private vaultPath: string;
+  private currentSessionId: string;
 
   constructor(vaultPath: string, masterKey: string) {
     this.vaultPath = vaultPath;
     this.masterKey = masterKey;
+    this.currentSessionId = 'default';
 
     this.db = new Database(vaultPath);
 
@@ -34,6 +39,14 @@ export class Vault {
     this.initializeDatabase();
 
     this.cleanupExpired();
+  }
+
+  setSessionId(sessionId: string): void {
+    this.currentSessionId = sessionId;
+  }
+
+  getSessionId(): string {
+    return this.currentSessionId;
   }
 
   private initializeDatabase(): void {
@@ -63,7 +76,7 @@ export class Vault {
     `);
   }
 
-  private async deriveKey(masterSecret: string, salt: Buffer): Promise<CryptoKey> {
+  private async deriveKey(masterSecret: string, salt: Buffer) {
     try {
       const encoder = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
@@ -98,7 +111,7 @@ export class Vault {
     }
   }
 
-  private async encrypt(value: string, key: CryptoKey): Promise<{ encrypted: Buffer; iv: Buffer; authTag: Buffer }> {
+  private async encrypt(value: string, key: any): Promise<{ encrypted: Buffer; iv: Buffer; authTag: Buffer }> {
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(value);
@@ -135,7 +148,7 @@ export class Vault {
     }
   }
 
-  private async decrypt(encrypted: Buffer, iv: Buffer, authTag: Buffer, key: CryptoKey): Promise<string> {
+  private async decrypt(encrypted: Buffer, iv: Buffer, authTag: Buffer, key: any): Promise<string> {
     try {
       const combined = Buffer.concat([encrypted, authTag]);
 
@@ -158,6 +171,8 @@ export class Vault {
   }
 
   async store(token: string, category: string, value: string, options?: StoreOptions): Promise<number> {
+    const startTime = Date.now();
+
     const salt = crypto.randomBytes(32);
     const key = await this.deriveKey(this.masterKey, salt);
 
@@ -173,10 +188,31 @@ export class Vault {
 
     const result = stmt.run(token, category, encrypted, iv, authTag, now, expiresAt);
 
+    const elapsed = Date.now() - startTime;
+
+    const auditLogger = getGlobalAuditLogger();
+    if (auditLogger) {
+      const details: VaultAuditDetails = {
+        vaultOperation: 'store',
+        category,
+        entryCount: 1
+      };
+      void auditLogger.log({
+        operation: 'vault_store',
+        sessionId: this.currentSessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details
+      });
+    }
+
     return result.lastInsertRowid as number;
   }
 
   async retrieve(token: string, category: string): Promise<string | null> {
+    const startTime = Date.now();
+
     const row = this.db.prepare(`
       SELECT encrypted_value, iv, auth_tag, expires_at
       FROM entries
@@ -186,22 +222,79 @@ export class Vault {
     `).get(token, category, Date.now()) as VaultEntry | undefined;
 
     if (!row) {
+      const elapsed = Date.now() - startTime;
+      const auditLogger = getGlobalAuditLogger();
+      if (auditLogger) {
+        const details: VaultAuditDetails = {
+          vaultOperation: 'retrieve',
+          category,
+          found: false
+        };
+        void auditLogger.log({
+          operation: 'vault_retrieve',
+          sessionId: this.currentSessionId,
+          level: 'info',
+          success: false,
+          duration: elapsed,
+          details
+        });
+      }
       return null;
     }
 
     const salt = crypto.randomBytes(32);
     const key = await this.deriveKey(this.masterKey, salt);
 
-    return await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
+    const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
+
+    const elapsed = Date.now() - startTime;
+    const auditLogger = getGlobalAuditLogger();
+    if (auditLogger) {
+      const details: VaultAuditDetails = {
+        vaultOperation: 'retrieve',
+        category,
+        found: true
+      };
+      void auditLogger.log({
+        operation: 'vault_retrieve',
+        sessionId: this.currentSessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details
+      });
+    }
+
+    return result;
   }
 
   cleanupExpired(): number {
+    const startTime = Date.now();
+
     const stmt = this.db.prepare(`
       DELETE FROM entries
       WHERE expires_at IS NOT NULL AND expires_at < ?
     `);
 
     const result = stmt.run(Date.now());
+
+    const elapsed = Date.now() - startTime;
+    const auditLogger = getGlobalAuditLogger();
+    if (auditLogger) {
+      const details: VaultAuditDetails = {
+        vaultOperation: 'cleanup',
+        entryCount: result.changes,
+        reason: 'expired_entries'
+      };
+      void auditLogger.log({
+        operation: 'vault_cleanup',
+        sessionId: this.currentSessionId,
+        level: 'info',
+        success: true,
+        duration: elapsed,
+        details
+      });
+    }
 
     return result.changes;
   }

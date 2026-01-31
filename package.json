@@ -2,17 +2,30 @@
   "name": "openclaw-guard",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "openclaw-guard": "./dist/cli/index.js"
+  },
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.1.26"
+    "openclaw": ">=2026.1.29"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "yargs": "^17.7.0"
   },
   "devDependencies": {
-    "vitest": "^2.0.0",
-    "openclaw": "workspace:*"
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^20.0.0",
+    "@types/yargs": "^17.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
   }
 }
