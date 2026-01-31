@@ -1,0 +1,8 @@
+{
+  "id": "guard",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
