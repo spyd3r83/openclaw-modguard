@@ -6,9 +6,9 @@ OpenClaw ModGuard is a PII/Sensitive Data Masking plugin for OpenClaw. It detect
 
 ## Core Constraints
 
-- Plugin source: `./`
-- Production OpenClaw: `$OPENCLAW_DIR/` (DO NOT MODIFY)
-- Dev environment: `./dev/`
+- Plugin source: This repository root
+- OpenClaw installation: Set via `OPENCLAW_DIR` environment variable
+- Dev environment: `./dev/` directory
 - Package manager: **pnpm 10.x** required
 - Node.js: **22.x** required
 
@@ -16,7 +16,7 @@ OpenClaw ModGuard is a PII/Sensitive Data Masking plugin for OpenClaw. It detect
 
 ### Setup
 ```bash
-cd ./dev
+cd dev
 ./setup.sh
 ```
 

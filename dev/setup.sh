@@ -6,7 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-OPENCLAW_DIR="$OPENCLAW_DIR"
+
+# OpenClaw installation directory - must be set by user
+OPENCLAW_DIR="${OPENCLAW_DIR:-}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -22,6 +24,13 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 # Verify OpenClaw installation exists
+if [[ -z "$OPENCLAW_DIR" ]]; then
+  echo "Error: OPENCLAW_DIR environment variable not set" >&2
+  echo "Set it to your OpenClaw installation directory, e.g.:" >&2
+  echo "  export OPENCLAW_DIR=/path/to/openclaw" >&2
+  exit 1
+fi
+
 if [[ ! -d "$OPENCLAW_DIR" ]]; then
   echo "Error: OpenClaw not found at $OPENCLAW_DIR" >&2
   exit 1
@@ -99,7 +108,7 @@ else
   npm run build
 fi
 
-# Check if production Docker image exists
+# Check if OpenClaw Docker image exists
 if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
   echo ""
   echo "==> Building OpenClaw Docker image"
@@ -131,18 +140,18 @@ cat > "$OPENCLAW_DEV_CONFIG_DIR/openclaw.json" << EOF
   "models": {
     "providers": {
       "ollama": {
-        "baseUrl": "http://localhost:11434/v1",
+        "baseUrl": "${OLLAMA_BASE_URL:-http://localhost:11434/v1}",
         "apiKey": "ollama-local",
         "api": "openai-completions",
         "models": [
           {
-            "id": "glm-4.6:cloud",
-            "name": "GLM 4.6 Cloud",
-            "reasoning": true,
+            "id": "llama3:latest",
+            "name": "Llama 3",
+            "reasoning": false,
             "input": ["text"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-            "contextWindow": 160000,
-            "maxTokens": 160000
+            "contextWindow": 8192,
+            "maxTokens": 4096
           }
         ]
       }
