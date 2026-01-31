@@ -5,11 +5,11 @@ services:
       HOME: /home/node
       TERM: xterm-256color
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
-      MODGUARD_MASTER_KEY: ${MODGUARD_MASTER_KEY}
+      GUARD_MASTER_KEY: ${GUARD_MASTER_KEY:-dev-guard-master-key-32bytes!}
     volumes:
       - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
-      - ${OPENCLAW_MODGUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/modguard:ro
+      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-28789}:28789"
       - "${OPENCLAW_BRIDGE_PORT:-28790}:28790"
@@ -32,11 +32,11 @@ services:
       HOME: /home/node
       TERM: xterm-256color
       BROWSER: echo
-      MODGUARD_MASTER_KEY: ${MODGUARD_MASTER_KEY}
+      GUARD_MASTER_KEY: ${GUARD_MASTER_KEY:-dev-guard-master-key-32bytes!}
     volumes:
       - ${OPENCLAW_DEV_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_DEV_WORKSPACE_DIR}:/home/node/workspace
-      - ${OPENCLAW_MODGUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/modguard:ro
+      - ${OPENCLAW_GUARD_PLUGIN_DIR}:/home/node/.openclaw/extensions/guard:ro
     stdin_open: true
     tty: true
     init: true
