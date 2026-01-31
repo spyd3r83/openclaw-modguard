@@ -2,9 +2,45 @@
   "name": "openclaw-guard",
   "version": "0.1.0",
   "type": "module",
+  "description": "PII/Sensitive Data Masking Plugin for OpenClaw",
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "pii",
+    "masking",
+    "redaction",
+    "gdpr",
+    "privacy",
+    "security",
+    "encryption"
+  ],
+  "license": "MIT",
+  "author": "Anomaly Co",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anomalyco/openclaw-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anomalyco/openclaw-guard/issues"
+  },
+  "homepage": "https://github.com/anomalyco/openclaw-guard#readme",
   "bin": {
     "openclaw-guard": "./dist/cli/index.js"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "openclaw": {
     "extensions": [
       "./index.ts"
@@ -27,5 +63,16 @@
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepack": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build"
   }
 }
