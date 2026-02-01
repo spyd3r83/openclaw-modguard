@@ -17,7 +17,7 @@ pnpm --version       # Should be >= 10.0.0
 
 ## Installation
 
-### Option 1: Install from Source (Recommended for Development)
+### Install from Source
 
 **Step 1: Clone and Build**
 ```bash
@@ -36,40 +36,28 @@ pnpm build
 
 There are two ways to install the plugin into OpenClaw:
 
-**Method A: Via Environment Variable (for development)**
+**Method A: Copy to OpenClaw Plugins Directory (Recommended)**
 ```bash
 # Set OPENCLAW_DIR to your OpenClaw installation
 export OPENCLAW_DIR=/path/to/your/openclaw
 
 # Copy plugin to OpenClaw's plugins directory
 mkdir -p $OPENCLAW_DIR/plugins/openclaw-modguard
-cp -r dist openclaw.plugin.json package.json $OPENCLAW_DIR/plugins/openclaw-modguard/
+cp -r dist openclaw.plugin.json package.json node_modules $OPENCLAW_DIR/plugins/openclaw-modguard/
 
 # Restart OpenClaw
 # (See your OpenClaw setup for restart instructions)
 ```
 
-**Method B: Via OpenClaw's Plugin Config**
+**Method B: Reference Plugin Path in Config**
 
 Add to your OpenClaw configuration (e.g., `~/.openclaw/config.yaml`):
 ```yaml
 plugins:
-  - path: /path/to/openclaw-modguard
+  - path: /absolute/path/to/openclaw-modguard
 ```
 
 Then restart OpenClaw.
-
-### Option 2: Install as npm Package (Production)
-
-**Note**: This assumes the plugin is published to npm. If not published, use Option 1.
-
-```bash
-# Install globally
-npm install -g openclaw-modguard
-
-# Or install via OpenClaw's plugin manager
-openclaw plugins install openclaw-modguard
-```
 
 ## Verify Installation
 
@@ -189,7 +177,12 @@ If you see errors about `better-sqlite3` bindings:
 
 ```bash
 # Rebuild native modules
-npm rebuild better-sqlite3
+cd /path/to/openclaw-modguard
+pnpm rebuild better-sqlite3
+pnpm build
+
+# Copy updated files to OpenClaw
+cp -r dist node_modules $OPENCLAW_DIR/plugins/openclaw-modguard/
 ```
 
 ### Permission Errors
@@ -200,7 +193,7 @@ If you see permission errors:
 # Ensure proper ownership
 sudo chown -R $(whoami) ~/.openclaw
 chmod 700 ~/.openclaw
-chmod 600 ~/.openclaw/guard/vault.db
+chmod 600 ~/.openclaw/modguard/vault.db
 ```
 
 ### Node.js Version
@@ -210,6 +203,22 @@ Ensure you're using Node.js 22 or higher:
 ```bash
 node --version
 # Should show v22.x.x or higher
+```
+
+### Plugin Not Loading
+
+If OpenClaw doesn't recognize the plugin:
+
+```bash
+# Verify files are in the right place
+ls -la $OPENCLAW_DIR/plugins/openclaw-modguard/
+# Should see: dist/, openclaw.plugin.json, package.json, node_modules/
+
+# Check OpenClaw logs for errors
+tail -f ~/.openclaw/logs/openclaw.log
+
+# Verify plugin manifest
+cat $OPENCLAW_DIR/plugins/openclaw-modguard/openclaw.plugin.json
 ```
 
 ## Docker Installation
@@ -223,14 +232,21 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenClaw Guard
-RUN npm install -g openclaw-modguard
+# Install pnpm
+RUN npm install -g pnpm
+
+# Clone and build plugin
+WORKDIR /opt
+RUN git clone https://github.com/spyd3r83/openclaw-modguard.git
+WORKDIR /opt/openclaw-modguard
+RUN pnpm install && pnpm build
 
 # Set environment variables
-ENV GUARD_VAULT_PATH=/data/vault.db
-ENV GUARD_MASTER_KEY=
+ENV MODGUARD_VAULT_PATH=/data/vault.db
+ENV MODGUARD_MASTER_KEY=
 
 # Create data directory
 RUN mkdir -p /data && chmod 700 /data
@@ -243,29 +259,32 @@ VOLUME ["/data"]
 To upgrade to the latest version:
 
 ```bash
-openclaw plugins update openclaw-modguard
-```
+cd /path/to/openclaw-modguard
+git pull origin main
+pnpm install
+pnpm build
 
-Or:
+# Copy updated files to OpenClaw plugins directory
+export OPENCLAW_DIR=/path/to/your/openclaw
+cp -r dist openclaw.plugin.json package.json node_modules $OPENCLAW_DIR/plugins/openclaw-modguard/
 
-```bash
-npm update -g openclaw-modguard
+# Restart OpenClaw
 ```
 
 ## Uninstalling
 
 ```bash
-openclaw plugins uninstall openclaw-modguard
-```
+# Remove from OpenClaw plugins directory
+rm -rf $OPENCLAW_DIR/plugins/openclaw-modguard
 
-Or:
+# Or remove plugin path from OpenClaw config
+# Edit ~/.openclaw/config.yaml and remove the modguard entry
 
-```bash
-npm uninstall -g openclaw-modguard
+# Restart OpenClaw
 ```
 
 Note: The vault database is not removed during uninstallation. To completely remove all data:
 
 ```bash
-rm -rf ~/.openclaw/guard
+rm -rf ~/.openclaw/modguard
 ```

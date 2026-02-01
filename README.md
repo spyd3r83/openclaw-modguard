@@ -25,7 +25,7 @@ export OPENCLAW_DIR=/path/to/your/openclaw
 
 # Copy to OpenClaw plugins
 mkdir -p $OPENCLAW_DIR/plugins/openclaw-modguard
-cp -r dist openclaw.plugin.json package.json $OPENCLAW_DIR/plugins/openclaw-modguard/
+cp -r dist openclaw.plugin.json package.json node_modules $OPENCLAW_DIR/plugins/openclaw-modguard/
 ```
 
 ### 2. Configure
