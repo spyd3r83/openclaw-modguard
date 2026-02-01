@@ -6,7 +6,7 @@ Standalone OpenClaw plugin for PII/Sensitive Data Masking.
 
 OpenClaw ModGuard protects sensitive information in AI agent conversations by detecting and masking PII, secrets, and network identifiers before they reach AI model, and unmasking them in responses back to users.
 
-## Examnple Use Cases:
+## Example Use Cases:
 <img src="images/mask-PII.png" alt="OpenClaw ModGuard Logo">
 
 ## Quick Start
