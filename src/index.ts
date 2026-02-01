@@ -143,6 +143,8 @@ export function isValidToken(token: unknown): token is import('./tokenizer.js').
   return validateToken(token);
 }
 
+let apiRef: OpenClawPluginApi | null = null;
+
 const guardPlugin = {
   id: 'modguard',
   name: 'OpenClaw ModGuard',
@@ -150,6 +152,8 @@ const guardPlugin = {
   description: 'Secure PII masking and vault storage plugin for OpenClaw',
   configSchema: {
     safeParse(value: unknown) {
+      console.log('[ModGuard] safeParse called with:', JSON.stringify(value));
+      
       if (typeof value !== 'object' || value === null) {
         return { success: false, error: 'Config must be an object' };
       }
@@ -172,9 +176,26 @@ const guardPlugin = {
       }
 
       try {
+        console.log('[ModGuard] Initializing with vault:', vaultPath);
         initializeModGuardState(vaultPath, masterKey);
+        console.log('[ModGuard] State initialized:', state.initialized);
+        
+        // Register hooks after successful initialization
+        if (apiRef) {
+          console.log('[ModGuard] apiRef exists, registering hooks');
+          if (state.initialized) {
+            registerHooks(apiRef, state);
+            apiRef.logger.info('ModGuard hooks registered successfully');
+          } else {
+            console.log('[ModGuard] State not initialized after initializeModGuardState');
+          }
+        } else {
+          console.log('[ModGuard] apiRef is null, deferring hook registration');
+        }
+        
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
+        console.error('[ModGuard] Initialization error:', error);
         if (error instanceof VaultError) {
           return { success: false, error: error.message };
         }
@@ -196,17 +217,40 @@ const guardPlugin = {
       }
     }
   },
-  register(api: OpenClawPluginApi): void {
+  register(api: OpenClawPluginApi, config?: unknown): void {
+    apiRef = api;
+    console.log('[ModGuard] register() called');
     api.logger.info('OpenClaw ModGuard plugin registered');
+
+    // Initialize from environment variables (OpenClaw standard pattern)
+    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/home/node/.openclaw/modguard/vault.db';
+    const masterKey = process.env.MODGUARD_MASTER_KEY;
+    
+    console.log('[ModGuard] Env - MODGUARD_VAULT_PATH:', vaultPath);
+    console.log('[ModGuard] Env - MODGUARD_MASTER_KEY:', masterKey ? '[REDACTED]' : 'missing');
+    
+    if (masterKey) {
+      try {
+        console.log('[ModGuard] Initializing with vault:', vaultPath);
+        initializeModGuardState(vaultPath, masterKey);
+        console.log('[ModGuard] State initialized:', state.initialized);
+        
+        if (state.initialized) {
+          registerHooks(api, state);
+          api.logger.info('ModGuard hooks registered successfully');
+        }
+      } catch (error) {
+        api.logger.error(`ModGuard initialization failed: ${error}`);
+        console.error('[ModGuard] Init error:', error);
+      }
+    } else {
+      api.logger.warn('ModGuard not initialized - MODGUARD_MASTER_KEY environment variable not set');
+    }
 
     registerModGuardStatus(api);
     registerModGuardDetect(api);
-
-    if (state.initialized) {
-      registerHooks(api, state);
-    } else {
-      api.logger.warn('ModGuard hooks not registered - plugin not initialized');
-    }
+    
+    console.log('[ModGuard] Commands registered, state.initialized =', state.initialized);
   }
 };
 

@@ -8,18 +8,6 @@
 
 ## Installation Methods
 
-### From npm Registry (Recommended)
-
-```bash
-openclaw plugins install openclaw-guard
-```
-
-Or using npm directly:
-
-```bash
-npm install -g openclaw-guard
-```
-
 ### From Source
 
 ```bash
