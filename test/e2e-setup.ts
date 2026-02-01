@@ -10,7 +10,7 @@ export let auditPath: string;
 
 beforeAll(async () => {
   // Create isolated test directory for each E2E test run
-  testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openclaw-guard-e2e-'));
+  testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openclaw-modguard-e2e-'));
   vaultPath = path.join(testDir, 'vault.db');
   auditPath = path.join(testDir, 'audit.jsonl');
 

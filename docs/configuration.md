@@ -4,7 +4,7 @@
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GUARD_VAULT_PATH` | Path to vault database | `/tmp/openclaw-guard-vault.db` |
+| `GUARD_VAULT_PATH` | Path to vault database | `/tmp/openclaw-modguard-vault.db` |
 | `GUARD_MASTER_KEY` | Master encryption key | `default-master-key` |
 
 **Security Note**: Always set `GUARD_MASTER_KEY` to a strong, unique value in production.

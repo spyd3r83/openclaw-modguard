@@ -44,7 +44,7 @@ pnpm build && docker compose -f dev/docker-compose.yml restart openclaw-gateway
 ### Required Files
 
 ```
-openclaw-guard/
+openclaw-modguard/
 ├── openclaw.plugin.json    # Plugin manifest (MUST match plugin ID)
 ├── package.json            # With openclaw.extensions pointing to dist/
 ├── dist/                   # Compiled JS output (required for external plugins)

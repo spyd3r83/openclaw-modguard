@@ -12,8 +12,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/anomalyco/openclaw-guard.git
-cd openclaw-guard
+git clone https://github.com/spyd3r83/openclaw-modguard.git
+cd openclaw-modguard
 
 # Install dependencies
 pnpm install
@@ -138,7 +138,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenClaw Guard
-RUN npm install -g openclaw-guard
+RUN npm install -g openclaw-modguard
 
 # Set environment variables
 ENV GUARD_VAULT_PATH=/data/vault.db
@@ -155,25 +155,25 @@ VOLUME ["/data"]
 To upgrade to the latest version:
 
 ```bash
-openclaw plugins update openclaw-guard
+openclaw plugins update openclaw-modguard
 ```
 
 Or:
 
 ```bash
-npm update -g openclaw-guard
+npm update -g openclaw-modguard
 ```
 
 ## Uninstalling
 
 ```bash
-openclaw plugins uninstall openclaw-guard
+openclaw plugins uninstall openclaw-modguard
 ```
 
 Or:
 
 ```bash
-npm uninstall -g openclaw-guard
+npm uninstall -g openclaw-modguard
 ```
 
 Note: The vault database is not removed during uninstallation. To completely remove all data:

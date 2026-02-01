@@ -299,4 +299,4 @@ To report pattern issues:
 2. **False Negatives**: Provide the text that should have been detected
 3. **Include context**: Surrounding text, expected pattern type
 
-Submit issues at: https://github.com/anomalyco/openclaw-guard/issues
+Submit issues at: https://github.com/spyd3r83/openclaw-modguard/issues

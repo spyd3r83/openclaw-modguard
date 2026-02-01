@@ -12,13 +12,13 @@
 
 1. **Verify installation:**
    ```bash
-   npm list -g openclaw-guard
+   npm list -g openclaw-modguard
    ```
 
 2. **Reinstall the plugin:**
    ```bash
-   openclaw plugins uninstall openclaw-guard
-   openclaw plugins install openclaw-guard
+   openclaw plugins uninstall openclaw-modguard
+   openclaw plugins install openclaw-modguard
    ```
 
 3. **Check Node.js version:**
@@ -225,8 +225,8 @@
    xcode-select --install
 
    # Then reinstall
-   npm uninstall -g openclaw-guard
-   npm install -g openclaw-guard
+   npm uninstall -g openclaw-modguard
+   npm install -g openclaw-modguard
    ```
 
 3. **Check Node.js version compatibility:**
@@ -275,7 +275,7 @@ Attempted to tokenize an empty string.
 ### Enable Debug Logging
 
 ```bash
-export DEBUG=openclaw-guard:*
+export DEBUG=openclaw-modguard:*
 openclaw guard detect "test@example.com"
 ```
 
@@ -313,7 +313,7 @@ openclaw guard policy validate config.json
 
 If the issue persists:
 
-1. **Search existing issues**: https://github.com/anomalyco/openclaw-guard/issues
+1. **Search existing issues**: https://github.com/spyd3r83/openclaw-modguard/issues
 
 2. **Create a new issue** with:
    - Node.js version

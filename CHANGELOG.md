@@ -103,5 +103,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Troubleshooting guide
 - Pattern reference
 
-[Unreleased]: https://github.com/anomalyco/openclaw-modguard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/anomalyco/openclaw-modguard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/spyd3r83/openclaw-modguard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/spyd3r83/openclaw-modguard/releases/tag/v0.1.0

@@ -219,10 +219,9 @@ To rotate the master key:
 
 If you discover a security vulnerability, please report it responsibly:
 
-1. **Do not** open a public GitHub issue
-2. Email: security@anomalyco.com
-3. Include detailed reproduction steps
-4. Allow time for a fix before disclosure
+1. open a GitHub issue
+2. Include detailed reproduction steps
+3. Allow time for a fix before disclosure
 
 We aim to acknowledge reports within 48 hours and provide fixes within 30 days for critical issues.
 
