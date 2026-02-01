@@ -1,15 +1,25 @@
 # Installation Guide
 
-## Requirements
+## Prerequisites
 
+Before installing OpenClaw ModGuard, ensure you have:
+
+- **OpenClaw**: >= 2026.1.29 (installed and running)
 - **Node.js**: >= 22.0.0
-- **OpenClaw**: >= 2026.1.29
-- **Operating System**: Linux, macOS, Windows
+- **pnpm**: >= 10.0.0 (recommended) or npm >= 10.0.0
 
-## Installation Methods
+Check your versions:
+```bash
+openclaw --version   # Should be >= 2026.1.29
+node --version       # Should be >= v22.0.0
+pnpm --version       # Should be >= 10.0.0
+```
 
-### From Source
+## Installation
 
+### Option 1: Install from Source (Recommended for Development)
+
+**Step 1: Clone and Build**
 ```bash
 # Clone the repository
 git clone https://github.com/spyd3r83/openclaw-modguard.git
@@ -20,21 +30,141 @@ pnpm install
 
 # Build the plugin
 pnpm build
-
-# Link for local development
-pnpm link
 ```
 
-## Dependencies
+**Step 2: Install into OpenClaw**
 
-### Runtime Dependencies
+There are two ways to install the plugin into OpenClaw:
 
-- **better-sqlite3**: SQLite database for vault storage (native module)
-- **yargs**: CLI argument parsing
+**Method A: Via Environment Variable (for development)**
+```bash
+# Set OPENCLAW_DIR to your OpenClaw installation
+export OPENCLAW_DIR=/path/to/your/openclaw
 
-### Native Module Compilation
+# Copy plugin to OpenClaw's plugins directory
+mkdir -p $OPENCLAW_DIR/plugins/openclaw-modguard
+cp -r dist openclaw.plugin.json package.json $OPENCLAW_DIR/plugins/openclaw-modguard/
 
-The `better-sqlite3` package requires native compilation. Ensure you have:
+# Restart OpenClaw
+# (See your OpenClaw setup for restart instructions)
+```
+
+**Method B: Via OpenClaw's Plugin Config**
+
+Add to your OpenClaw configuration (e.g., `~/.openclaw/config.yaml`):
+```yaml
+plugins:
+  - path: /path/to/openclaw-modguard
+```
+
+Then restart OpenClaw.
+
+### Option 2: Install as npm Package (Production)
+
+**Note**: This assumes the plugin is published to npm. If not published, use Option 1.
+
+```bash
+# Install globally
+npm install -g openclaw-modguard
+
+# Or install via OpenClaw's plugin manager
+openclaw plugins install openclaw-modguard
+```
+
+## Verify Installation
+
+After installation, verify the plugin is loaded:
+
+```bash
+# List installed plugins (should show "modguard")
+openclaw plugins list
+
+# Check ModGuard status
+openclaw modguard status
+
+# Test detection
+openclaw modguard detect "My email is test@example.com"
+```
+
+Expected output:
+```
+✓ ModGuard Status: Active
+✓ Vault: Initialized
+✓ Patterns loaded: 9 patterns across 3 categories
+```
+
+## Configure the Plugin
+
+### Step 1: Set Master Key (Required)
+
+**IMPORTANT**: The master key encrypts all sensitive data in the vault. Keep it secure!
+
+```bash
+# Option A: Environment variable (recommended)
+export MODGUARD_MASTER_KEY="your-secure-random-key-min-32-chars"
+
+# Option B: Add to your shell profile (~/.bashrc, ~/.zshrc)
+echo 'export MODGUARD_MASTER_KEY="your-secure-random-key"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Generate a secure master key:**
+```bash
+# Linux/macOS
+openssl rand -base64 32
+
+# Or use Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+### Step 2: Configure Plugin Settings
+
+Add ModGuard configuration to OpenClaw's config file (`~/.openclaw/config.yaml`):
+
+```yaml
+plugins:
+  modguard:
+    vaultPath: ~/.openclaw/modguard/vault.db
+    masterKey: ${MODGUARD_MASTER_KEY}  # References env variable
+    policy:
+      failClosed: true
+      rules:
+        - name: mask-pii
+          action: mask
+          priority: 100
+          conditions:
+            - type: category
+              operator: "=="
+              value: pii
+            - type: confidence
+              operator: ">="
+              value: 0.8
+```
+
+**Minimal configuration** (uses defaults):
+```yaml
+plugins:
+  modguard:
+    masterKey: ${MODGUARD_MASTER_KEY}
+```
+
+### Step 3: Restart OpenClaw
+
+```bash
+# Restart OpenClaw to load the plugin
+# (Specific command depends on your OpenClaw setup)
+systemctl restart openclaw  # If using systemd
+# or
+docker compose restart      # If using Docker
+```
+
+## Dependencies (for Development)
+
+If building from source, you need:
+
+### Native Module Build Tools
+
+The `better-sqlite3` package requires native compilation:
 
 **Linux:**
 ```bash
@@ -49,48 +179,6 @@ xcode-select --install
 **Windows:**
 ```powershell
 npm install -g windows-build-tools
-```
-
-## Post-Install Setup
-
-### 1. Initialize the Vault
-
-The vault is automatically initialized on first use. To manually initialize:
-
-```bash
-# Set master key (required)
-export GUARD_MASTER_KEY="your-secure-master-key"
-
-# Optional: Set custom vault path
-export GUARD_VAULT_PATH="~/.openclaw/guard/vault.db"
-
-# Verify installation
-openclaw guard status
-```
-
-### 2. Configure the Plugin
-
-Create a configuration file at `~/.openclaw/guard/config.json`:
-
-```json
-{
-  "vaultPath": "~/.openclaw/guard/vault.db",
-  "masterKey": "${GUARD_MASTER_KEY}",
-  "policy": {
-    "failClosed": true,
-    "rules": []
-  }
-}
-```
-
-### 3. Verify Installation
-
-```bash
-# Check plugin status
-openclaw guard status
-
-# Test detection
-openclaw guard detect "My email is test@example.com"
 ```
 
 ## Troubleshooting Installation
