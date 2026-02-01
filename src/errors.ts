@@ -160,3 +160,11 @@ export class AuditRetentionPolicyError extends AuditError {
     Object.setPrototypeOf(this, AuditRetentionPolicyError.prototype);
   }
 }
+
+export class DetectionError extends VaultError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'DETECTION_FAILED', context);
+    this.name = 'DetectionError';
+    Object.setPrototypeOf(this, DetectionError.prototype);
+  }
+}

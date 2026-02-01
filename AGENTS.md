@@ -119,6 +119,65 @@ api.registerCommand({ name: 'modguard-status', ... });
 api.registerCommand({ name: 'modguard-detect', ... });
 ```
 
+## Hooks
+
+ModGuard automatically hooks into OpenClaw's lifecycle events when the plugin is loaded. No additional configuration is required.
+
+### Available Hooks
+
+#### `before_agent_start`
+- **Purpose**: Detect and mask PII in user messages before they reach the model
+- **Behavior**:
+  - Extracts user message from `prompt` field
+  - Uses Detector to find sensitive patterns
+  - Tokenizes detected PII values
+  - Stores tokens in SessionManager for later unmasking
+  - Returns masked version as `prependContext`
+- **Implementation**: `src/hooks/before-agent-start.ts`
+
+#### `message_sending`
+- **Purpose**: Restore original PII values in outbound channel messages
+- **Behavior**:
+  - Finds all tokens in message content
+  - Uses SessionManager + Vault to detokenize
+  - Returns unmasked content
+  - Only applies to external channel messages (Discord, Telegram, etc.)
+- **Implementation**: `src/hooks/message-sending.ts`
+
+#### `agent_end`
+- **Purpose**: Clean up session context after agent completes
+- **Behavior**:
+  - Clears session from SessionManager
+  - Clears session from Tokenizer
+  - Releases memory
+- **Implementation**: `src/hooks/agent-end.ts`
+
+### Session Management
+
+The `SessionManager` class (src/session-manager.ts) tracks masked tokens across multi-turn conversations:
+
+- **TTL-based cleanup**: Sessions expire after 30 minutes of inactivity (configurable)
+- **Max sessions**: Automatically evicts oldest session when 1000 active sessions reached
+- **Token storage**: Maps tokens to original values for each session
+- **Automatic registration**: All hooks registered automatically via `registerHooks()`
+
+### Known Limitations
+
+1. **prependContext doesn't replace original message**
+   - OpenClaw's `before_agent_start` hook only allows injecting context, not modifying the original message
+   - The model may see both the original user message (with PII) and the masked version (via prependContext)
+   - This is a limitation of the current OpenClaw architecture
+
+2. **Direct API/CLI responses contain tokens**
+   - The `message_sending` hook only intercepts external channel messages
+   - Direct API and CLI responses will show tokens (e.g., `EMAIL_a1b2c3d4`) instead of original values
+   - Users must use channels (Discord, Telegram) for full unmasking functionality
+
+3. **Future enhancement**
+   - To support full end-to-end masking, OpenClaw would need new hooks:
+     - `before_model_input`: Allow modifying/replacing the actual message sent to the model
+     - `after_model_output`: Allow modifying model response before returning
+
 ## Build Commands
 
 ```bash
@@ -255,6 +314,12 @@ src/
 ├── backup.ts         # Vault backup/restore
 ├── errors.ts         # Typed error classes
 ├── types.ts          # TypeScript interfaces
+├── session-manager.ts # Session context tracking
+├── hooks/            # OpenClaw lifecycle hooks
+│   ├── index.ts      # Hook registration orchestrator
+│   ├── before-agent-start.ts  # Masking logic
+│   ├── message-sending.ts     # Unmasking logic
+│   └── agent-end.ts          # Session cleanup
 ├── patterns/         # Detection regex patterns
 │   ├── pii.ts        # Email, phone, SSN, credit card
 │   ├── secrets.ts    # API keys, tokens, PEM blocks

@@ -4,6 +4,7 @@ import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
 import { registerModGuardStatus } from './cli/status.js';
 import { registerModGuardDetect } from './cli/detect.js';
 import { VaultError } from './errors.js';
+import { registerHooks } from './hooks/index.js';
 
 // Re-export security utilities
 export {
@@ -47,9 +48,51 @@ export {
   type BenchmarkResult
 } from './performance.js';
 
+// Re-export SessionManager
+export {
+  SessionManager,
+  type SessionContext,
+  type SessionManagerOptions
+} from './session-manager.js';
+
+// Export hook types
+export type {
+  BeforeAgentStartContext,
+  MessageSendingContext,
+  AgentEndContext,
+  BeforeAgentStartHandler,
+  MessageSendingHandler,
+  AgentEndHandler
+};
+
+interface BeforeAgentStartContext {
+  prompt: string;
+  messages?: unknown[];
+  sessionId?: string;
+}
+
+interface MessageSendingContext {
+  content: string;
+  channelId: string;
+  sessionId?: string;
+}
+
+interface AgentEndContext {
+  sessionId?: string;
+  prompt?: string;
+  response?: string;
+  error?: string;
+}
+
+type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ prependContext?: string } | void>;
+type MessageSendingHandler = (context: MessageSendingContext) => Promise<{ content?: string } | void>;
+type AgentEndHandler = (context: AgentEndContext) => Promise<void>;
+
 interface OpenClawPluginApi {
   logger: {
     info(message: string): void;
+    warn(message: string): void;
+    error(message: string): void;
   };
   registerCommand(command: {
     name: string;
@@ -60,6 +103,9 @@ interface OpenClawPluginApi {
       error?: string;
     }>;
   }): void;
+  on(event: 'before_agent_start', handler: BeforeAgentStartHandler): void;
+  on(event: 'message_sending', handler: MessageSendingHandler): void;
+  on(event: 'agent_end', handler: AgentEndHandler): void;
 }
 
 
@@ -155,6 +201,12 @@ const guardPlugin = {
 
     registerModGuardStatus(api);
     registerModGuardDetect(api);
+
+    if (state.initialized) {
+      registerHooks(api, state);
+    } else {
+      api.logger.warn('ModGuard hooks not registered - plugin not initialized');
+    }
   }
 };
 
