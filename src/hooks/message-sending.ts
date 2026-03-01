@@ -75,8 +75,7 @@ async function unmaskTokens(
       const originalValue = await tokenizer.detokenize(token as any, session);
       const tokenRegex = new RegExp(`\\b${token}\\b`, 'g');
       result = result.replace(tokenRegex, originalValue);
-    } catch (error) {
-      console.error(`Failed to unmask token ${token}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (_error) {
       throw new DetokenizationError(`Failed to unmask token ${token}`, { token, session });
     }
   }

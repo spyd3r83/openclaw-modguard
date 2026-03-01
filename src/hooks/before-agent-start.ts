@@ -36,10 +36,7 @@ export async function handleBeforeAgentStart(
     return {
       prependContext: masked
     };
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error in before_agent_start hook: ${error.message}`);
-    }
+  } catch (_error) {
     throw new DetectionError('Failed to mask PII in message', { sessionId: sessionId ?? 'unknown' });
   }
 }

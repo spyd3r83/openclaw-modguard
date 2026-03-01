@@ -17,6 +17,16 @@ const Database = _require('better-sqlite3') as typeof import('better-sqlite3');
 
 const yargs: any = typeof yargsLib === 'function' ? yargsLib : (yargsLib as any).default;
 
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error && 'toJSON' in error) {
+    return ((error as unknown as { toJSON(): { message: string } }).toJSON()).message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Operation failed';
+}
+
 const MAX_QUERY_LIMIT = 1000;
 
 const auditLogger = initializeGlobalAuditLogger();
@@ -328,9 +338,7 @@ async function handleVaultList(args: any): Promise<void> {
       });
     }
 
-    const safeMessage = error instanceof Error && 'toJSON' in error
-      ? (error as any).toJSON().message
-      : 'Failed to list vault entries';
+    const safeMessage = safeErrorMessage(error);
 
     console.error(`Error: ${safeMessage}`);
     process.exit(1);
@@ -441,7 +449,7 @@ async function handleVaultLookup(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error looking up token: ${error}`);
+    console.error(`Error looking up token: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -527,7 +535,7 @@ async function handleVaultStats(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error getting vault stats: ${error}`);
+    console.error(`Error getting vault stats: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -639,7 +647,7 @@ async function handleVaultPrune(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error pruning vault: ${error}`);
+    console.error(`Error pruning vault: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -762,7 +770,7 @@ async function handleVaultDelete(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error deleting vault entries: ${error}`);
+    console.error(`Error deleting vault entries: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -866,7 +874,7 @@ async function handleVaultExport(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error exporting vault entries: ${error}`);
+    console.error(`Error exporting vault entries: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -985,7 +993,7 @@ async function handleVaultBackup(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error creating backup: ${error}`);
+    console.error(`Error creating backup: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -1105,7 +1113,7 @@ async function handleVaultRestore(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error restoring vault: ${error}`);
+    console.error(`Error restoring vault: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -1193,7 +1201,7 @@ async function handleVaultRepair(args: any): Promise<void> {
         }
       });
     }
-    console.error(`Error repairing vault: ${error}`);
+    console.error(`Error repairing vault: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }

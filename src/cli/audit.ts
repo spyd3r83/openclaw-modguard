@@ -3,6 +3,16 @@ import { AuditFilter, AuditOperationType, LogLevel } from '../types.js';
 import { AuditReadError } from '../errors.js';
 import * as fs from 'node:fs/promises';
 
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error && 'toJSON' in error) {
+    return ((error as unknown as { toJSON(): { message: string } }).toJSON()).message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Operation failed';
+}
+
 function parseDate(dateStr: string): Date | undefined {
   if (!dateStr) return undefined;
 
@@ -97,7 +107,7 @@ async function handleAuditExport(args: any): Promise<void> {
       console.warn(`audit export took ${elapsed}ms (target <500ms)`);
     }
   } catch (error) {
-    console.error(`Error exporting audit log: ${error}`);
+    console.error(`Error exporting audit log: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -179,7 +189,7 @@ async function handleAuditQuery(args: any): Promise<void> {
       console.warn(`audit query took ${elapsed}ms (target <100ms)`);
     }
   } catch (error) {
-    console.error(`Error querying audit log: ${error}`);
+    console.error(`Error querying audit log: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -247,7 +257,7 @@ async function handleAuditStats(args: any): Promise<void> {
       console.warn(`audit stats took ${elapsed}ms (target <50ms)`);
     }
   } catch (error) {
-    console.error(`Error getting audit stats: ${error}`);
+    console.error(`Error getting audit stats: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -311,7 +321,7 @@ async function handleAuditVerify(args: any): Promise<void> {
       console.warn(`audit verify took ${elapsed}ms (target <1s)`);
     }
   } catch (error) {
-    console.error(`Error verifying audit log: ${error}`);
+    console.error(`Error verifying audit log: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
@@ -380,7 +390,7 @@ async function handleAuditTail(args: any): Promise<void> {
       }
     }
   } catch (error) {
-    console.error(`Error tailing audit log: ${error}`);
+    console.error(`Error tailing audit log: ${safeErrorMessage(error)}`);
     process.exit(1);
   }
 }
