@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-modguard",
+  "name": "modguard",
   "version": "0.1.0",
   "type": "module",
   "description": "PII/Sensitive Data Masking Plugin for OpenClaw",
