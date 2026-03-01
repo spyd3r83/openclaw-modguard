@@ -1,7 +1,8 @@
 export enum PatternCategory {
   PII = 'pii',
   SECRETS = 'secrets',
-  NETWORK = 'network'
+  NETWORK = 'network',
+  IPI = 'ipi'
 }
 
 export enum PatternType {
@@ -35,7 +36,7 @@ export interface Pattern {
   validator?: (match: string) => { valid: boolean; confidenceMultiplier?: number };
 }
 
-export type AuditOperationType = 'mask' | 'unmask' | 'vault_store' | 'vault_retrieve' | 'vault_cleanup' | 'cli';
+export type AuditOperationType = 'mask' | 'unmask' | 'vault_store' | 'vault_retrieve' | 'vault_cleanup' | 'cli' | 'ipi_detect';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
@@ -50,7 +51,7 @@ export interface AuditEntry {
   details: AuditEntryDetails;
 }
 
-export type AuditEntryDetails = MaskAuditDetails | UnmaskAuditDetails | VaultAuditDetails | CliAuditDetails;
+export type AuditEntryDetails = MaskAuditDetails | UnmaskAuditDetails | VaultAuditDetails | CliAuditDetails | IpiAuditDetails;
 
 export interface MaskAuditDetails {
   category: PatternType;
@@ -78,6 +79,21 @@ export interface CliAuditDetails {
   sanitized?: boolean;
 }
 
+export interface IpiAuditDetails {
+  boundaryId: string;
+  sessionId: string;      // session ID only, no content
+  takeover: boolean;
+  R: number;
+  ACE: number;
+  IE: number;
+  DE: number;
+  beta_ACE: number;
+  beta_IE: number;
+  suppressedToolCount: number;
+  repairedToolCount: number;
+  authorized: boolean;
+}
+
 export interface AuditFilter {
   session?: string;
   operation?: AuditOperationType[];
@@ -103,6 +119,7 @@ export interface IntegrityReport {
   sequenceGaps: number[];
   duplicateEntries: number[];
   corruptedLines: number[];
+  invalidSignatures?: number[];
   checksum?: string;
 }
 

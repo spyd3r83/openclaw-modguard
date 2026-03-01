@@ -1,6 +1,6 @@
 {
-  "name": "openclaw-modguard",
-  "version": "0.1.0",
+  "name": "modguard",
+  "version": "0.2.0",
   "type": "module",
   "description": "PII/Sensitive Data Masking Plugin for OpenClaw",
   "keywords": [
@@ -12,7 +12,10 @@
     "gdpr",
     "privacy",
     "security",
-    "encryption"
+    "encryption",
+    "prompt-injection",
+    "indirect-prompt-injection",
+    "agent-security"
   ],
   "license": "MIT",
   "author": "James Ignacio",
@@ -59,7 +62,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "@types/yargs": "^17.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.0.0",
@@ -77,6 +80,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "lint": "oxlint",
     "format": "oxfmt",
-    "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build"
+    "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
+    "patch-openclaw": "node scripts/patch-openclaw.js"
   }
 }

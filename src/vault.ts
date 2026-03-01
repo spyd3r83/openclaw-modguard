@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { VaultError, EncryptionError, KeyDerivationError } from './errors.js';
 import { VaultAuditDetails } from './types.js';
 import { getGlobalAuditLogger } from './audit.js';
-import { secureZero, secureRandomBytes } from './security.js';
+import { secureRandomBytes } from './security.js';
 
 // Web Crypto API types
 type CryptoKey = Awaited<ReturnType<typeof crypto.subtle.deriveKey>>;
@@ -70,10 +70,6 @@ function validateVaultPath(vaultPath: string): void {
   if (vaultPath !== ':memory:') {
     const absolutePath = path.resolve(vaultPath);
 
-    if (absolutePath.includes('..')) {
-      throw new VaultError('vaultPath cannot contain path traversal sequences', 'INVALID_PATH');
-    }
-
     if (absolutePath.includes('~') && !absolutePath.startsWith(process.env.HOME || '')) {
       throw new VaultError('vaultPath cannot contain tilde outside home directory', 'INVALID_PATH');
     }
@@ -114,14 +110,14 @@ interface StoreOptions {
 
 export class Vault {
   private db: Database.Database;
-  private masterKey: string;
+  // BUG-041: masterKey is cleared after key derivation to allow GC; undefined means already consumed
+  private masterKey: string | undefined;
   private vaultPath: string;
   private currentSessionId: string;
   private retrieveLimiter: RateLimiter;
   private storeLimiter: RateLimiter;
   private derivedKey: CryptoKey | null = null;
   private keyDerivationPromise: Promise<CryptoKey> | null = null;
-  private static readonly KEY_SALT = Buffer.from('openclaw-modguard-v1-salt-do-not-change', 'utf8');
 
   constructor(vaultPath: string, masterKey: string) {
     validateVaultPath(vaultPath);
@@ -152,12 +148,39 @@ export class Vault {
     this.keyDerivationPromise = this.deriveKeyOnce();
   }
 
+  // BUG-040: Get or create a per-vault random salt stored in vault_meta table.
+  // This ensures two deployments with the same master key derive different AES-256 keys.
+  private getOrCreateVaultSalt(): Buffer {
+    const row = this.db
+      .prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'")
+      .get() as { value: string } | undefined;
+
+    if (row) {
+      return Buffer.from(row.value, 'hex');
+    }
+
+    // First-time vault creation: generate and persist a random 32-byte salt
+    const salt = secureRandomBytes(32);
+    this.db
+      .prepare("INSERT INTO vault_meta (key, value) VALUES ('vault_salt', ?)")
+      .run(salt.toString('hex'));
+    return salt;
+  }
+
   private async deriveKeyOnce(): Promise<CryptoKey> {
     if (this.derivedKey) {
       return this.derivedKey;
     }
 
+    // BUG-041: masterKey may already be cleared if deriveKeyOnce is called twice
+    if (!this.masterKey) {
+      throw new KeyDerivationError('Master key has already been consumed; create a new Vault instance', {});
+    }
+
     try {
+      // BUG-040: Use per-vault random salt from the database
+      const vaultSalt = this.getOrCreateVaultSalt();
+
       const encoder = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
         'raw',
@@ -170,7 +193,7 @@ export class Vault {
       this.derivedKey = await crypto.subtle.deriveKey(
         {
           name: 'PBKDF2',
-          salt: Vault.KEY_SALT,
+          salt: vaultSalt,
           iterations: 100000,
           hash: 'SHA-256'
         },
@@ -183,9 +206,17 @@ export class Vault {
         ['encrypt', 'decrypt']
       );
 
+      // BUG-041: Clear the master key reference after successful derivation to allow GC.
+      // Strings are immutable in JS so we cannot zero the underlying memory, but releasing
+      // the reference makes the string eligible for collection.
+      this.masterKey = undefined;
+
       return this.derivedKey;
-    } catch (error) {
-      throw new KeyDerivationError('Failed to derive encryption key', { error });
+    } catch (err) {
+      // BUG-039: Never propagate raw exception objects in context — extract message only
+      throw new KeyDerivationError('Failed to derive encryption key', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 
@@ -216,6 +247,14 @@ export class Vault {
   }
 
   private initializeDatabase(): void {
+    // BUG-040: vault_meta stores per-vault random salt (and any future metadata)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS vault_meta (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      )
+    `);
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,7 +265,8 @@ export class Vault {
         auth_tag BLOB NOT NULL,
         salt BLOB NOT NULL,
         created_at INTEGER NOT NULL,
-        expires_at INTEGER
+        expires_at INTEGER,
+        UNIQUE(token, category)
       )
     `);
 
@@ -245,6 +285,13 @@ export class Vault {
 
   // Legacy method for backwards compatibility with entries that used per-entry salt
   private async deriveKeyLegacy(salt: Buffer): Promise<CryptoKey> {
+    // BUG-041: masterKey may be undefined after primary derivation; legacy path only used
+    // for old entries that pre-date per-vault salt migration — if masterKey is gone we
+    // cannot re-derive, so throw a clear error.
+    if (!this.masterKey) {
+      throw new KeyDerivationError('Cannot derive legacy key: master key already consumed', {});
+    }
+
     try {
       const encoder = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
@@ -270,12 +317,16 @@ export class Vault {
         false,
         ['encrypt', 'decrypt']
       );
-    } catch (error) {
-      throw new KeyDerivationError('Failed to derive encryption key', { error });
+    } catch (err) {
+      // BUG-039: Never propagate raw exception objects — extract message only
+      throw new KeyDerivationError('Failed to derive encryption key', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 
-  private async encrypt(value: string, key: any): Promise<{ encrypted: Buffer; iv: Buffer; authTag: Buffer }> {
+  // BUG-039: key typed as CryptoKey (not any); error context contains only message string
+  private async encrypt(value: string, key: CryptoKey): Promise<{ encrypted: Buffer; iv: Buffer; authTag: Buffer }> {
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(value);
@@ -293,7 +344,6 @@ export class Vault {
 
       const encryptedBuffer = Buffer.from(encrypted);
 
-      const ivLength = 12;
       const authTagLength = 16;
       const ciphertextLength = encryptedBuffer.length - authTagLength;
 
@@ -305,14 +355,16 @@ export class Vault {
         iv: iv,
         authTag: authTag
       };
-    } catch (error) {
+    } catch (err) {
+      // BUG-039: Never place raw error object in context — extract message string only
       throw new EncryptionError('Failed to encrypt data', {
-        error
+        reason: err instanceof Error ? err.message : 'unknown',
       });
     }
   }
 
-  private async decrypt(encrypted: Buffer, iv: Buffer, authTag: Buffer, key: any): Promise<string> {
+  // BUG-039: key typed as CryptoKey (not any); error context contains only message string
+  private async decrypt(encrypted: Buffer, iv: Buffer, authTag: Buffer, key: CryptoKey): Promise<string> {
     try {
       const combined = Buffer.concat([encrypted, authTag]);
 
@@ -327,9 +379,10 @@ export class Vault {
 
       const decoder = new TextDecoder();
       return decoder.decode(decrypted);
-    } catch (error) {
+    } catch (err) {
+      // BUG-039: Never place raw error object in context — extract message string only
       throw new EncryptionError('Failed to decrypt data', {
-        error
+        reason: err instanceof Error ? err.message : 'unknown',
       });
     }
   }
@@ -351,12 +404,13 @@ export class Vault {
     const expiresAt = options?.ttl ? now + options.ttl : null;
 
     const stmt = this.db.prepare(`
-      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+      INSERT OR REPLACE INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Store static salt marker to indicate cached key was used
-    const result = stmt.run(token, category, encrypted, iv, authTag, Vault.KEY_SALT, now, expiresAt);
+    // BUG-040: Store a zero-length sentinel in the salt column for vault-level-key entries.
+    // Legacy entries have a non-empty per-entry salt in this column.
+    const result = stmt.run(token, category, encrypted, iv, authTag, Buffer.alloc(0), now, expiresAt);
 
     const elapsed = Date.now() - startTime;
 
@@ -418,11 +472,12 @@ export class Vault {
     }
 
     try {
-      // Use cached key if salt matches static salt, otherwise derive legacy key
-      const isStaticSalt = row.salt.equals(Vault.KEY_SALT);
-      const key = isStaticSalt
-        ? await this.getKey()
-        : await this.deriveKeyLegacy(row.salt);
+      // BUG-040: zero-length salt means entry was encrypted with the vault-level key.
+      // Non-empty salt is a legacy per-entry salt — derive a key from it for backwards compat.
+      const isLegacyEntry = row.salt.length > 0;
+      const key = isLegacyEntry
+        ? await this.deriveKeyLegacy(row.salt)
+        : await this.getKey();
 
       const result = await this.decrypt(row.encrypted_value, row.iv, row.auth_tag, key);
 
@@ -445,7 +500,7 @@ export class Vault {
       }
 
       return result;
-    } catch (error) {
+    } catch (err) {
       const elapsed = Date.now() - startTime;
       const auditLogger = getGlobalAuditLogger();
       if (auditLogger) {
@@ -464,7 +519,10 @@ export class Vault {
           details
         });
       }
-      throw new EncryptionError('Failed to decrypt vault entry', { error });
+      // BUG-039: sanitize error — never place raw exception in context
+      throw new EncryptionError('Failed to decrypt vault entry', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 
@@ -497,6 +555,15 @@ export class Vault {
     }
 
     return result.changes;
+  }
+
+  entryCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM entries').get() as { n: number };
+    return row.n;
+  }
+
+  getVaultPath(): string {
+    return this.vaultPath;
   }
 
   close(): void {

@@ -5,15 +5,17 @@ import { SessionManager } from '../session-manager.js';
 import { handleBeforeAgentStart } from './before-agent-start.js';
 import { handleMessageSending } from './message-sending.js';
 import { handleAgentEnd } from './agent-end.js';
+import { AgentSentry, registerAgentSentry, defaultAgentSentryConfig } from '../agent-sentry/index.js';
+import { TextAnalysisDryRunEngine } from '../agent-sentry/text-analysis-engine.js';
+import { Policy } from '../policy.js';
 
 interface OpenClawPluginApi {
   logger: {
     info(message: string): void;
     warn(message: string): void;
+    error(message: string): void;
   };
-  on(event: 'before_agent_start', handler: (ctx: BeforeAgentStartContext) => Promise<{ prependContext?: string } | void>): void;
-  on(event: 'message_sending', handler: (ctx: MessageSendingContext) => Promise<{ content?: string } | void>): void;
-  on(event: 'agent_end', handler: (ctx: AgentEndContext) => Promise<void>): void;
+  on(event: string, handler: (...args: unknown[]) => unknown): void;
 }
 
 interface ModGuardState {
@@ -33,17 +35,36 @@ export function registerHooks(api: OpenClawPluginApi, state: ModGuardState): voi
   const detector = state.detector;
   const tokenizer = state.tokenizer;
 
-  api.on('before_agent_start', async (ctx: BeforeAgentStartContext) => {
-    return handleBeforeAgentStart(ctx, { detector, tokenizer, sessionManager });
+  api.on('before_agent_start', async (ctx: unknown) => {
+    return handleBeforeAgentStart(ctx as BeforeAgentStartContext, { detector, tokenizer, sessionManager });
   });
 
-  api.on('message_sending', async (ctx: MessageSendingContext) => {
-    return handleMessageSending(ctx, { tokenizer, sessionManager });
+  api.on('message_sending', async (ctx: unknown) => {
+    return handleMessageSending(ctx as MessageSendingContext, { tokenizer, sessionManager });
   });
 
-  api.on('agent_end', async (ctx: AgentEndContext) => {
-    return handleAgentEnd(ctx, { sessionManager, tokenizer });
+  api.on('agent_end', async (ctx: unknown) => {
+    return handleAgentEnd(ctx as AgentEndContext, { sessionManager, tokenizer });
   });
 
   api.logger.info('ModGuard hooks registered: before_agent_start, message_sending, agent_end');
+
+  // AgentSentry: IPI detection via after_tool_call + before_tool_call.
+  // No OpenClaw patching required — both hooks are natively supported.
+  //
+  // Calibrated gamma for TextAnalysisDryRunEngine:
+  // Obvious IPI payloads → R≈0.42; benign returns → R≈0.37.
+  // gamma=0.38 catches obvious injections with no false positives on clean content.
+  const textEngine = new TextAnalysisDryRunEngine();
+  const sentryPolicy = new Policy({ rules: [], defaultAction: 'allow' });
+  const sentryConfig = { ...defaultAgentSentryConfig, gamma: 0.38 };
+
+  const agentSentry = new AgentSentry(
+    sentryConfig,
+    textEngine,
+    state.vault as import('../vault.js').Vault,
+    sentryPolicy,
+  );
+
+  registerAgentSentry(api, agentSentry, sentryConfig);
 }

@@ -32,7 +32,7 @@ export function registerModGuardDetect(api: OpenClawPluginApi): void {
       if (!text || typeof text !== 'string') {
         return {
           success: false,
-          error: 'Missing or invalid text argument. Usage: /modguard-detect <text>',
+          error: 'Missing or invalid text argument. Usage: modguard-detect <text>',
           output: ''
         };
       }
@@ -40,7 +40,7 @@ export function registerModGuardDetect(api: OpenClawPluginApi): void {
       if (text.trim().length === 0) {
         return {
           success: false,
-          error: 'Text cannot be empty. Usage: /modguard-detect <text>',
+          error: 'Text cannot be empty. Usage: modguard-detect <text>',
           output: ''
         };
       }

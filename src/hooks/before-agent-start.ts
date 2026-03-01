@@ -13,16 +13,13 @@ interface BeforeAgentStartOptions {
 export async function handleBeforeAgentStart(
   context: BeforeAgentStartContext,
   options: BeforeAgentStartOptions
-): Promise<{ prependContext?: string }> {
+): Promise<{ replacePrompt?: string }> {
   const { detector, tokenizer, sessionManager } = options;
   const { prompt, sessionId } = context;
 
   if (!prompt || prompt.length === 0) {
     return {};
   }
-
-  const session = sessionId ?? tokenizer.generateSessionId();
-  sessionManager.createSession(session);
 
   try {
     const detections = detector.detect(prompt);
@@ -31,16 +28,16 @@ export async function handleBeforeAgentStart(
       return {};
     }
 
+    const session = sessionId ?? tokenizer.generateSessionId();
+    sessionManager.getOrCreateSession(session);
+
     const masked = await maskText(prompt, detections, tokenizer, session);
 
     return {
-      prependContext: masked
+      replacePrompt: masked
     };
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error in before_agent_start hook: ${error.message}`);
-    }
-    throw new DetectionError('Failed to mask PII in message', { sessionId: session });
+  } catch (_error) {
+    throw new DetectionError('Failed to mask PII in message', { sessionId: sessionId ?? 'unknown' });
   }
 }
 
@@ -85,7 +82,7 @@ async function maskText(
     });
   }
 
-  segments.sort((a, b) => a.start - b.start);
+  segments.sort((a, b) => a.start - b.start); // redundant but harmless — detections arrive pre-sorted
 
   let result = '';
   let pos = 0;

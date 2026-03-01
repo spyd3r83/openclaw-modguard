@@ -1,6 +1,5 @@
 import { Tokenizer, SessionId, isValidToken } from '../tokenizer.js';
 import { SessionManager } from '../session-manager.js';
-import { DetokenizationError } from '../errors.js';
 import type { MessageSendingContext } from '../index.js';
 
 interface MessageSendingOptions {
@@ -8,7 +7,9 @@ interface MessageSendingOptions {
   sessionManager: SessionManager;
 }
 
-const TOKEN_PATTERN = /\b([A-Z]+_[0-9a-f]{8})\b/g;
+// Token suffix length must match Tokenizer.tokenize() output: 8 bytes = 16 hex chars.
+// NOTE: keep in sync with TOKEN_REGEX in tokenizer.ts.
+const TOKEN_PATTERN = /\b([A-Z][A-Z0-9_]+_[0-9a-f]{16})\b/g;
 
 export async function handleMessageSending(
   context: MessageSendingContext,
@@ -21,6 +22,13 @@ export async function handleMessageSending(
     return {};
   }
 
+  // Skip detokenization for known internal channels (api, cli, internal).
+  // All other channels (Discord, Telegram, Slack, custom) receive unmasked content.
+  const INTERNAL_CHANNELS = ['api', 'cli', 'internal'];
+  if (INTERNAL_CHANNELS.includes(context.channelId.toLowerCase())) {
+    return {};
+  }
+
   if (!sessionId) {
     console.warn('No sessionId provided in message_sending hook, cannot unmask tokens');
     return {};
@@ -29,7 +37,7 @@ export async function handleMessageSending(
   const session = sessionManager.getSession(sessionId);
 
   if (!session) {
-    console.warn(`No session found for sessionId ${sessionId}, cannot unmask tokens`);
+    console.warn('No session found in message_sending hook, cannot unmask tokens');
     return {};
   }
 
@@ -47,6 +55,11 @@ export async function handleMessageSending(
 }
 
 function findTokens(text: string): string[] {
+  // BUG-036: Reset lastIndex before each use to prevent stale state from
+  // a previous call leaving a non-zero lastIndex, which would cause the
+  // regex engine to start mid-string and miss leading tokens.
+  TOKEN_PATTERN.lastIndex = 0;
+
   const tokens: string[] = [];
   const seen = new Set<string>();
 
@@ -66,7 +79,8 @@ async function unmaskTokens(
   text: string,
   tokens: string[],
   tokenizer: Tokenizer,
-  session: SessionId
+  session: SessionId,
+  logger?: { warn(msg: string): void }
 ): Promise<string> {
   let result = text;
 
@@ -75,9 +89,17 @@ async function unmaskTokens(
       const originalValue = await tokenizer.detokenize(token as any, session);
       const tokenRegex = new RegExp(`\\b${token}\\b`, 'g');
       result = result.replace(tokenRegex, originalValue);
-    } catch (error) {
-      console.error(`Failed to unmask token ${token}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new DetokenizationError(`Failed to unmask token ${token}`, { token, session });
+    } catch (_error) {
+      // BUG-037: Do NOT rethrow — a single stale/expired token must not abort
+      // unmasking of all remaining tokens.
+      // Log token ID only (no original value) per security rule 2 (no PII in logs).
+      const msg = `ModGuard: detokenization failed for token ${token} in session ${session}`;
+      if (logger) {
+        logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
+      // Leave the token placeholder in the result and continue.
     }
   }
 

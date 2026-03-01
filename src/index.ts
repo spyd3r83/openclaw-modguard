@@ -4,7 +4,6 @@ import { Tokenizer, isValidToken as validateToken } from './tokenizer.js';
 import { registerModGuardStatus } from './cli/status.js';
 import { registerModGuardDetect } from './cli/detect.js';
 import { VaultError } from './errors.js';
-import { registerHooks } from './hooks/index.js';
 
 // Re-export security utilities
 export {
@@ -62,7 +61,14 @@ export type {
   AgentEndContext,
   BeforeAgentStartHandler,
   MessageSendingHandler,
-  AgentEndHandler
+  AgentEndHandler,
+  ToolResultPersistContext,
+  ToolResultMessage,
+  ToolResultPersistHandler,
+  BeforeToolResultContext,
+  DryRunContext,
+  BeforeToolResultHandler,
+  DryRunHandler,
 };
 
 interface BeforeAgentStartContext {
@@ -84,9 +90,60 @@ interface AgentEndContext {
   error?: string;
 }
 
-type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ prependContext?: string } | void>;
+type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ prependContext?: string; replacePrompt?: string } | void>;
 type MessageSendingHandler = (context: MessageSendingContext) => Promise<{ content?: string } | void>;
 type AgentEndHandler = (context: AgentEndContext) => Promise<void>;
+
+/**
+ * OpenClaw's actual tool_result_persist hook context.
+ * Fires synchronously when a tool result is about to be written to the session transcript.
+ * Handlers must be synchronous — returning a Promise is an error.
+ */
+interface ToolResultPersistContext {
+  /** The toolResult AgentMessage about to be persisted. */
+  message: ToolResultMessage;
+  toolName?: string;
+  toolCallId?: string;
+  isSynthetic?: boolean;
+}
+
+/** Minimal shape of the ToolResultMessage from @mariozechner/pi-agent-core. */
+interface ToolResultMessage {
+  role: 'toolResult';
+  toolCallId: string;
+  toolName: string;
+  content: Array<{ type: string; text?: string }>;
+  isError: boolean;
+  timestamp: number;
+  [key: string]: unknown;
+}
+
+interface BeforeToolResultContext {
+  sessionId: string;
+  toolName: string;
+  toolOutput: string;
+  dialogueHistory: string[];
+  userGoal: string;
+}
+
+interface DryRunContext {
+  sessionId: string;
+  userInput: string;
+  mediatorContent: string;
+  record: boolean;
+}
+
+/**
+ * Synchronous handler for tool_result_persist.
+ * Must NOT return a Promise. Return { message } to replace the persisted message.
+ */
+type ToolResultPersistHandler = (
+  event: ToolResultPersistContext,
+  ctx: { agentId?: string; sessionKey?: string; toolName?: string; toolCallId?: string },
+) => { message?: ToolResultMessage } | void;
+
+type BeforeToolResultHandler = (context: BeforeToolResultContext) => Promise<{ toolOutput?: string; cancel?: boolean } | void>;
+type DryRunHandler = (context: DryRunContext) => Promise<{ proposedAction: import('./agent-sentry/types.js').ProposedAction } | void>;
 
 interface OpenClawPluginApi {
   logger: {
@@ -106,6 +163,10 @@ interface OpenClawPluginApi {
   on(event: 'before_agent_start', handler: BeforeAgentStartHandler): void;
   on(event: 'message_sending', handler: MessageSendingHandler): void;
   on(event: 'agent_end', handler: AgentEndHandler): void;
+  on(event: 'tool_result_persist', handler: ToolResultPersistHandler): void;
+  on(event: 'before_tool_result', handler: BeforeToolResultHandler): void;
+  on(event: 'dry_run', handler: DryRunHandler): void;
+  on(event: string, handler: (...args: unknown[]) => unknown): void;
 }
 
 
@@ -144,6 +205,7 @@ export function isValidToken(token: unknown): token is import('./tokenizer.js').
 }
 
 let apiRef: OpenClawPluginApi | null = null;
+let hooksRegistered = false;
 
 const guardPlugin = {
   id: 'modguard',
@@ -152,8 +214,6 @@ const guardPlugin = {
   description: 'Secure PII masking and vault storage plugin for OpenClaw',
   configSchema: {
     safeParse(value: unknown) {
-      console.log('[ModGuard] safeParse called with:', JSON.stringify(value));
-      
       if (typeof value !== 'object' || value === null) {
         return { success: false, error: 'Config must be an object' };
       }
@@ -170,34 +230,28 @@ const guardPlugin = {
         return { success: false, error: 'masterKey must be a string' };
       }
 
-      const extraKeys = Object.keys(config).filter(k => k !== 'vaultPath' && k !== 'masterKey');
+      const allowedKeys = ['vaultPath', 'masterKey', 'agentSentry'];
+      const extraKeys = Object.keys(config).filter(k => !allowedKeys.includes(k));
       if (extraKeys.length > 0) {
         return { success: false, error: `Unknown config properties: ${extraKeys.join(', ')}` };
       }
 
       try {
-        console.log('[ModGuard] Initializing with vault:', vaultPath);
         initializeModGuardState(vaultPath, masterKey);
-        console.log('[ModGuard] State initialized:', state.initialized);
         
         // Register hooks after successful initialization
         if (apiRef) {
-          console.log('[ModGuard] apiRef exists, registering hooks');
-          if (state.initialized) {
+          if (state.initialized && !hooksRegistered) {
             registerHooks(apiRef, state);
+            hooksRegistered = true;
             apiRef.logger.info('ModGuard hooks registered successfully');
-          } else {
-            console.log('[ModGuard] State not initialized after initializeModGuardState');
           }
-        } else {
-          console.log('[ModGuard] apiRef is null, deferring hook registration');
         }
         
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
-        console.error('[ModGuard] Initialization error:', error);
         if (error instanceof VaultError) {
-          return { success: false, error: error.message };
+          return { success: false, error: 'Failed to initialize vault' };
         }
         return { success: false, error: 'Failed to initialize modguard' };
       }
@@ -213,35 +267,47 @@ const guardPlugin = {
         masterKey: {
           type: 'string',
           description: 'Master encryption key for vault'
+        },
+        agentSentry: {
+          type: 'object',
+          description: 'AgentSentry IPI detection configuration',
+          properties: {
+            enabled: { type: 'boolean' },
+            K: { type: 'number' },
+            windowSize: { type: 'number' },
+            gamma: { type: 'number' },
+            diagnosticProbe: { type: 'string' },
+            dryRunTimeoutMs: { type: 'number' },
+          },
         }
       }
     }
   },
-  register(api: OpenClawPluginApi, config?: unknown): void {
+  register(api: OpenClawPluginApi, _config?: unknown): void {
     apiRef = api;
-    console.log('[ModGuard] register() called');
     api.logger.info('OpenClaw ModGuard plugin registered');
 
     // Initialize from environment variables (OpenClaw standard pattern)
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/home/node/.openclaw/modguard/vault.db';
+    const vaultPath = process.env.MODGUARD_VAULT_PATH;
     const masterKey = process.env.MODGUARD_MASTER_KEY;
     
-    console.log('[ModGuard] Env - MODGUARD_VAULT_PATH:', vaultPath);
-    console.log('[ModGuard] Env - MODGUARD_MASTER_KEY:', masterKey ? '[REDACTED]' : 'missing');
-    
+    if (!vaultPath) {
+      api.logger.warn('ModGuard not initialized - MODGUARD_VAULT_PATH environment variable not set');
+      return;
+    }
+
     if (masterKey) {
       try {
-        console.log('[ModGuard] Initializing with vault:', vaultPath);
         initializeModGuardState(vaultPath, masterKey);
-        console.log('[ModGuard] State initialized:', state.initialized);
         
-        if (state.initialized) {
+        if (state.initialized && !hooksRegistered) {
           registerHooks(api, state);
+          hooksRegistered = true;
           api.logger.info('ModGuard hooks registered successfully');
         }
       } catch (error) {
-        api.logger.error(`ModGuard initialization failed: ${error}`);
-        console.error('[ModGuard] Init error:', error);
+        const safeMsg = error instanceof VaultError ? 'Vault initialization failed' : 'Initialization failed';
+        api.logger.error(`ModGuard initialization failed: ${safeMsg}`);
       }
     } else {
       api.logger.warn('ModGuard not initialized - MODGUARD_MASTER_KEY environment variable not set');
@@ -249,8 +315,6 @@ const guardPlugin = {
 
     registerModGuardStatus(api);
     registerModGuardDetect(api);
-    
-    console.log('[ModGuard] Commands registered, state.initialized =', state.initialized);
   }
 };
 

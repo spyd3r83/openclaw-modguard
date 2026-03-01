@@ -24,13 +24,15 @@ const DEFAULT_LOG_DIR = '.openclaw/modguard';
 const DEFAULT_LOG_FILE = 'audit.jsonl';
 const MAX_QUEUE_SIZE = 1000;
 const MAX_SEQUENCE_CACHE_SIZE = 10000;
-const DEFAULT_AUDIT_KEY = 'openclaw-modguard-audit-key';
 
 interface WriteQueueItem {
   entry: AuditEntry;
   resolve: (value: void) => void;
   reject: (reason?: unknown) => void;
 }
+
+// Lines buffered before the file handle is opened (BUG-044).
+type PendingLine = string;
 
 interface SignedAuditEntry extends AuditEntry {
   signature: string;
@@ -47,6 +49,8 @@ export class AuditLogger {
   private sequenceCache: Set<number>;
   private minLevel: LogLevel;
   private auditKey: Buffer;
+  /** Lines queued before the file handle is ready (BUG-044 fix). */
+  private pendingWrites: PendingLine[];
 
   constructor(logDir?: string, retentionPolicy?: Partial<RetentionPolicy>, minLevel: LogLevel = 'info', auditKey?: string | Buffer) {
     this.logDir = logDir || path.join(process.env.HOME || process.cwd(), DEFAULT_LOG_DIR);
@@ -55,9 +59,10 @@ export class AuditLogger {
     this.writeQueue = [];
     this.isWriting = false;
     this.fileHandle = null;
+    this.pendingWrites = [];
     this.minLevel = minLevel;
     this.sequenceCache = new Set();
-    this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || Buffer.from(DEFAULT_AUDIT_KEY, 'utf8');
+    this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || crypto.randomBytes(32);
     this.retentionPolicy = {
       enabled: retentionPolicy?.enabled ?? false,
       maxAgeDays: retentionPolicy?.maxAgeDays ?? 90,
@@ -77,6 +82,15 @@ export class AuditLogger {
     }
 
     this.fileHandle = await open(this.logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
+
+    // BUG-044 fix: flush any writes that were queued before the handle was ready.
+    if (this.pendingWrites.length > 0) {
+      const lines = this.pendingWrites;
+      this.pendingWrites = [];
+      for (const line of lines) {
+        await this.fileHandle.write(line);
+      }
+    }
   }
 
   async log(entry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'>): Promise<void> {
@@ -143,7 +157,7 @@ export class AuditLogger {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return [];
       }
-      throw new AuditReadError('Failed to read audit log', { error });
+      throw new AuditReadError('Failed to read audit log', { reason: error instanceof Error ? error.message : 'unknown error' });
     }
   }
 
@@ -164,7 +178,8 @@ export class AuditLogger {
       vault_store: 0,
       vault_retrieve: 0,
       vault_cleanup: 0,
-      cli: 0
+      cli: 0,
+      ipi_detect: 0,
     };
 
     const categoryCounts: Record<string, number> = {};
@@ -299,6 +314,7 @@ export class AuditLogger {
       sequenceGaps,
       duplicateEntries,
       corruptedLines,
+      invalidSignatures: invalidSignatures.length > 0 ? invalidSignatures : undefined,
       checksum
     };
   }
@@ -372,6 +388,14 @@ export class AuditLogger {
       if (deletedCount > 0) {
         await fs.writeFile(this.logPath, filteredLines.join('\n'), { mode: 0o600 });
         await this.loadSequenceNumber();
+
+        // BUG-045 fix: the append file handle's internal position is now stale
+        // because writeFile truncated and rewrote the file underneath it.
+        // Close and reopen so subsequent appends land at the correct EOF offset.
+        if (this.fileHandle) {
+          await this.fileHandle.close();
+          this.fileHandle = await open(this.logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
+        }
       }
 
       return deletedCount;
@@ -379,7 +403,7 @@ export class AuditLogger {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return 0;
       }
-      throw new AuditRetentionPolicyError('Failed to apply retention policy', { error });
+      throw new AuditRetentionPolicyError('Failed to apply retention policy', { reason: error instanceof Error ? error.message : 'unknown error' });
     }
   }
 
@@ -398,16 +422,20 @@ export class AuditLogger {
     }
 
     this.isWriting = true;
+    let item: WriteQueueItem | undefined;
 
     try {
       while (this.writeQueue.length > 0) {
-        const item = this.writeQueue.shift();
+        item = this.writeQueue.shift();
         if (!item) break;
 
         const line = JSON.stringify(item.entry) + '\n';
 
         if (this.fileHandle) {
           await this.fileHandle.write(line);
+        } else {
+          // BUG-044 fix: file handle not yet open — buffer for flushing in initialize().
+          this.pendingWrites.push(line);
         }
 
         if (this.retentionPolicy.enabled && item.entry.sequence % 100 === 0) {
@@ -417,8 +445,11 @@ export class AuditLogger {
         item.resolve();
       }
     } catch (error) {
-      for (const item of this.writeQueue) {
+      if (item) {
         item.reject(error);
+      }
+      for (const queued of this.writeQueue) {
+        queued.reject(error);
       }
       this.writeQueue = [];
     } finally {
@@ -514,19 +545,22 @@ export class AuditLogger {
   }
 
   private verifyEntry(entry: SignedAuditEntry): boolean {
-    const entryWithoutSignature: Omit<AuditEntry, 'signature'> = {
+    // Reconstruct exactly the data that was signed: base fields without timestamp/sequence/signature,
+    // plus sequence as second arg (timestamp is excluded from the HMAC, matching signEntry at write time).
+    const baseEntry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'> = {
       operation: entry.operation,
       sessionId: entry.sessionId,
       level: entry.level,
       success: entry.success,
       duration: entry.duration,
-      details: entry.details,
-      sequence: entry.sequence,
-      timestamp: entry.timestamp
+      details: entry.details
     };
 
-    const expectedSignature = this.signEntry(entryWithoutSignature as any, entry.sequence);
-    return entry.signature === expectedSignature;
+    const expectedSignature = this.signEntry(baseEntry, entry.sequence);
+    const actual = Buffer.from(entry.signature, 'hex');
+    const expected = Buffer.from(expectedSignature, 'hex');
+    if (actual.length !== expected.length) return false;
+    return crypto.timingSafeEqual(actual, expected);
   }
 
   async *follow(filter?: AuditFilter, pollIntervalMs: number = 100): AsyncGenerator<AuditEntry> {
@@ -599,7 +633,10 @@ export function initializeGlobalAuditLogger(options?: {
     options?.minLevel
   );
 
-  void globalAuditLogger.initialize();
+  void globalAuditLogger.initialize().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : 'unknown error';
+    console.error(`ModGuard audit logger initialization failed: ${msg}`);
+  });
 
   return globalAuditLogger;
 }

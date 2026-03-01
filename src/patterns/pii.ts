@@ -39,7 +39,7 @@ export const piiPatterns: Pattern[] = [
   {
     type: PatternType.PHONE,
     category: PatternCategory.PII,
-    regex: /\b(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x(\d+))?\b/g,
+    regex: /(?<!\d{5})\b(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x(\d+))?\b(?!\d{5})/g,
     confidence: 0.85,
     description: 'International phone number',
     examples: ['+1 555-123-4567', '(555) 123-4567', '555.123.4567', '5551234567']

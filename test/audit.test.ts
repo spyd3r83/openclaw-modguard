@@ -593,4 +593,152 @@ describe('AuditLogger', () => {
       await logger.close();
     });
   });
+
+  describe('BUG-044: fire-and-forget init does not drop early writes', () => {
+    it('should persist writes that arrive before initialize() completes', async () => {
+      const earlyDir = '/tmp/test-audit-early-writes';
+      await fs.rm(earlyDir, { recursive: true, force: true }).catch(() => {});
+
+      // Create logger but do NOT await initialize — simulate fire-and-forget.
+      const logger = new AuditLogger(earlyDir, undefined, 'info');
+      const initPromise = logger.initialize(); // not awaited yet
+
+      // Queue a write immediately, before the handle is ready.
+      const logPromise = logger.log({
+        operation: 'mask',
+        sessionId: 'early-session',
+        level: 'info',
+        success: true,
+        details: { category: 'email', tokenCount: 1, categories: { email: 1 } }
+      });
+
+      // Now let everything settle.
+      await initPromise;
+      await logPromise;
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const entries = await logger.query({});
+      expect(entries.length).toBe(1);
+      expect(entries[0].sessionId).toBe('early-session');
+
+      await logger.close();
+      await fs.rm(earlyDir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it('should persist multiple concurrent early writes', async () => {
+      const earlyDir = '/tmp/test-audit-early-multi';
+      await fs.rm(earlyDir, { recursive: true, force: true }).catch(() => {});
+
+      const logger = new AuditLogger(earlyDir, undefined, 'info');
+      const initPromise = logger.initialize();
+
+      // Fire several writes before awaiting init.
+      const writePromises = Array.from({ length: 5 }, (_, i) =>
+        logger.log({
+          operation: 'mask',
+          sessionId: `early-${i}`,
+          level: 'info',
+          success: true,
+          details: { category: 'email', tokenCount: 1, categories: { email: 1 } }
+        })
+      );
+
+      await initPromise;
+      await Promise.all(writePromises);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const entries = await logger.query({});
+      expect(entries.length).toBe(5);
+
+      await logger.close();
+      await fs.rm(earlyDir, { recursive: true, force: true }).catch(() => {});
+    });
+  });
+
+  describe('BUG-045: retention rewrite does not corrupt subsequent appends', () => {
+    it('should append correctly after retention policy rewrites the file', async () => {
+      const retentionDir = '/tmp/test-audit-retention-reopen';
+      await fs.rm(retentionDir, { recursive: true, force: true }).catch(() => {});
+
+      // Enable retention with maxFileSizeMB=0 so the policy triggers immediately,
+      // and maxAgeDays=-1 so all entries look old.
+      const logger = new AuditLogger(
+        retentionDir,
+        { enabled: true, maxAgeDays: -1, maxFileSizeMB: 0, compressionEnabled: false },
+        'info'
+      );
+      await logger.initialize();
+
+      // Write first entry — triggers retention at sequence 100 (via processQueue),
+      // but we can also trigger it directly here.
+      await logger.log({
+        operation: 'mask',
+        sessionId: 'before-retention',
+        level: 'info',
+        success: true,
+        details: { category: 'email', tokenCount: 1, categories: { email: 1 } }
+      });
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Explicitly apply retention (all entries are "old" → deleted).
+      await logger.applyRetentionPolicy();
+
+      // Now write a new entry AFTER retention has rewritten the file.
+      await logger.log({
+        operation: 'unmask',
+        sessionId: 'after-retention',
+        level: 'info',
+        success: true,
+        details: { tokenCount: 1, categories: ['email'] }
+      });
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      await logger.close();
+
+      // Re-open and read back to verify no corruption / duplicate entries.
+      const reader = new AuditLogger(retentionDir, undefined, 'info');
+      await reader.initialize();
+      const entries = await reader.query({});
+      await reader.close();
+
+      // The post-retention entry must exist and be parseable.
+      const afterEntry = entries.find(e => e.sessionId === 'after-retention');
+      expect(afterEntry).toBeDefined();
+      expect(afterEntry!.operation).toBe('unmask');
+
+      await fs.rm(retentionDir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it('should reopen file handle after retention policy rewrites (handle is not stale)', async () => {
+      const retentionDir = '/tmp/test-audit-retention-handle';
+      await fs.rm(retentionDir, { recursive: true, force: true }).catch(() => {});
+
+      const logger = new AuditLogger(
+        retentionDir,
+        { enabled: true, maxAgeDays: -1, maxFileSizeMB: 0, compressionEnabled: false },
+        'info'
+      );
+      await logger.initialize();
+
+      await logger.log({
+        operation: 'mask',
+        sessionId: 'pre-retention',
+        level: 'info',
+        success: true,
+        details: { category: 'email', tokenCount: 1, categories: { email: 1 } }
+      });
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const handleBefore = (logger as any).fileHandle;
+      await logger.applyRetentionPolicy();
+      const handleAfter = (logger as any).fileHandle;
+
+      // Handle must have been replaced (different object reference).
+      expect(handleAfter).not.toBeNull();
+      expect(handleAfter).not.toBe(handleBefore);
+
+      await logger.close();
+      await fs.rm(retentionDir, { recursive: true, force: true }).catch(() => {});
+    });
+  });
 });

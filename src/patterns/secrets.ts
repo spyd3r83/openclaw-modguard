@@ -4,7 +4,7 @@ export const secretsPatterns: Pattern[] = [
   {
     type: PatternType.API_KEY,
     category: PatternCategory.SECRETS,
-    regex: /\b(sk-|ghp_|github_pat_|xox[baprs]-|xapp-|gsk_|AIza|pplx-|npm_)[A-Za-z0-9_\-]{16,}/g,
+    regex: /\b(sk-|sk_(?:live_|test_)?|pk_(?:live_|test_)?|ghp_|github_pat_|xox[baprs]-|xapp-|gsk_|AIza|pplx[-_]|npm_)[A-Za-z0-9_\-]{12,}/g,
     confidence: 0.9,
     description: 'API key with known prefix',
     examples: ['sk-proj-abc123def456...', 'ghp_XYZ789ABC123', 'xoxb-12345-67890-abcdef', 'AIzaSyC-abc123def456']
@@ -20,7 +20,7 @@ export const secretsPatterns: Pattern[] = [
   {
     type: PatternType.PEM_BLOCK,
     category: PatternCategory.SECRETS,
-    regex: /-----BEGIN[A-Z\s]*(?:PRIVATE KEY|CERTIFICATE|PUBLIC KEY)-----[\s\S]+?-----END[A-Z\s]*(?:PRIVATE KEY|CERTIFICATE|PUBLIC KEY)-----/gi,
+    regex: /-----BEGIN ([A-Z0-9 ]*(?:CERTIFICATE REQUEST|CERTIFICATE|PRIVATE KEY|PUBLIC KEY|OPENSSH PRIVATE KEY))-----[\s\S]+?-----END \1-----/g,
     confidence: 1.0,
     description: 'PEM-encoded private key or certificate',
     examples: [

@@ -161,10 +161,101 @@ export class AuditRetentionPolicyError extends AuditError {
   }
 }
 
+export class BackupError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'BackupError';
+    Object.setPrototypeOf(this, BackupError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code
+    };
+  }
+}
+
+export class BackupVerifyError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_VERIFY_FAILED', context);
+    this.name = 'BackupVerifyError';
+    Object.setPrototypeOf(this, BackupVerifyError.prototype);
+  }
+}
+
+export class BackupRestoreError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_RESTORE_FAILED', context);
+    this.name = 'BackupRestoreError';
+    Object.setPrototypeOf(this, BackupRestoreError.prototype);
+  }
+}
+
+export class BackupRepairError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_REPAIR_FAILED', context);
+    this.name = 'BackupRepairError';
+    Object.setPrototypeOf(this, BackupRepairError.prototype);
+  }
+}
+
 export class DetectionError extends VaultError {
   constructor(message: string, context?: Record<string, unknown>) {
     super(message, 'DETECTION_FAILED', context);
     this.name = 'DetectionError';
     Object.setPrototypeOf(this, DetectionError.prototype);
+  }
+}
+
+export class IpiError extends Error {
+  constructor(message: string, public readonly context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'IpiError';
+    Object.setPrototypeOf(this, IpiError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message
+    };
+  }
+}
+
+export class CounterfactualError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'CounterfactualError';
+    Object.setPrototypeOf(this, CounterfactualError.prototype);
+  }
+}
+
+export class RiskEstimationError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'RiskEstimationError';
+    Object.setPrototypeOf(this, RiskEstimationError.prototype);
+  }
+}
+
+export class PurificationError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'PurificationError';
+    Object.setPrototypeOf(this, PurificationError.prototype);
+  }
+}
+
+export class PolicyGateError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'PolicyGateError';
+    Object.setPrototypeOf(this, PolicyGateError.prototype);
   }
 }

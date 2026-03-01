@@ -24,6 +24,10 @@ reference/
 .env.local
 .env.*.local
 
+#opencode
+.opencode/
+.prompts/
+
 # Logs
 logs/
 *.log

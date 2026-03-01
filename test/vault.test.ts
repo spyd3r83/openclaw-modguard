@@ -232,6 +232,115 @@ describe('Vault', () => {
       expect(name).toBe('Alice');
     });
   });
+
+  // --- BUG-039 tests ---
+  describe('BUG-039: EncryptionError context must not contain raw DOMException objects', () => {
+    it('should not include a raw exception object in EncryptionError context on decrypt failure', async () => {
+      // Store a valid entry, then corrupt the auth tag so decryption fails
+      const token = 'corrupt-token';
+      const category = 'email';
+      await vault.store(token, category, 'user@example.com');
+      await vault.ensureReady();
+
+      // Corrupt the auth_tag in the database so AES-GCM auth verification fails
+      const db = (vault as unknown as { db: Database.Database }).db;
+      db.prepare("UPDATE entries SET auth_tag = X'deadbeefdeadbeefdeadbeefdeadbeef' WHERE token = ?").run(token);
+
+      let caughtError: unknown;
+      try {
+        await vault.retrieve(token, category);
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).toBeInstanceOf(EncryptionError);
+      const encErr = caughtError as EncryptionError;
+
+      // context must not contain any raw exception object
+      if (encErr.context) {
+        for (const val of Object.values(encErr.context)) {
+          expect(val).not.toBeInstanceOf(Error);
+          // DOMException is an Error subclass; also guard against any object with a 'stack' prop
+          if (typeof val === 'object' && val !== null) {
+            expect('stack' in val).toBe(false);
+          }
+        }
+      }
+
+      // context should have a plain string 'reason' field
+      expect(typeof encErr.context?.reason).toBe('string');
+    });
+  });
+
+  // --- BUG-040 tests ---
+  describe('BUG-040: per-vault random salt', () => {
+    it('should generate a random vault_salt in vault_meta on first open', async () => {
+      await vault.ensureReady();
+      const db = (vault as unknown as { db: Database.Database }).db;
+      const row = db.prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'").get() as
+        | { value: string }
+        | undefined;
+
+      expect(row).toBeDefined();
+      expect(typeof row!.value).toBe('string');
+      // hex-encoded 32 bytes = 64 hex chars
+      expect(row!.value).toHaveLength(64);
+    });
+
+    it('should use distinct salts for two independent vault instances', async () => {
+      const vault2 = new Vault(':memory:', masterKey);
+
+      await vault.ensureReady();
+      await vault2.ensureReady();
+
+      const db1 = (vault as unknown as { db: Database.Database }).db;
+      const db2 = (vault2 as unknown as { db: Database.Database }).db;
+
+      const row1 = db1.prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'").get() as { value: string };
+      const row2 = db2.prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'").get() as { value: string };
+
+      // Two separate in-memory vaults should have different random salts
+      expect(row1.value).not.toBe(row2.value);
+
+      vault2.close();
+    });
+
+    it('should reuse the same salt on subsequent operations within the same vault', async () => {
+      await vault.ensureReady();
+      const db = (vault as unknown as { db: Database.Database }).db;
+
+      const saltBefore = (
+        db.prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'").get() as { value: string }
+      ).value;
+
+      // Trigger another key path call
+      await vault.store('t1', 'cat', 'val1');
+      await vault.retrieve('t1', 'cat');
+
+      const saltAfter = (
+        db.prepare("SELECT value FROM vault_meta WHERE key = 'vault_salt'").get() as { value: string }
+      ).value;
+
+      expect(saltBefore).toBe(saltAfter);
+    });
+  });
+
+  // --- BUG-041 tests ---
+  describe('BUG-041: masterKey cleared after key derivation', () => {
+    it('should clear the masterKey field after key derivation completes', async () => {
+      await vault.ensureReady();
+      // Access private field via type cast
+      const masterKeyField = (vault as unknown as { masterKey: string | undefined }).masterKey;
+      expect(masterKeyField).toBeUndefined();
+    });
+
+    it('should still be able to store and retrieve after masterKey is cleared', async () => {
+      await vault.ensureReady();
+      await vault.store('tk', 'cat', 'secret-value');
+      const result = await vault.retrieve('tk', 'cat');
+      expect(result).toBe('secret-value');
+    });
+  });
 });
 
 describe('VaultError classes', () => {

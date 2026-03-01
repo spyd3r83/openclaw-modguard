@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import { Vault } from './vault.js';
 import { PatternType, PatternCategory, MaskAuditDetails, UnmaskAuditDetails } from './types.js';
-import { TokenizationError, DetokenizationError, InvalidTokenError, VaultError } from './errors.js';
+import { TokenizationError, DetokenizationError, InvalidTokenError } from './errors.js';
 import { getGlobalAuditLogger } from './audit.js';
 import { secureZero, secureRandomBytes } from './security.js';
 
@@ -16,7 +16,7 @@ const TOKEN_PREFIXES = new Map<PatternCategory, PatternType[]>([
   [PatternCategory.NETWORK, [PatternType.IPV4, PatternType.IPV6]]
 ]);
 
-const TOKEN_REGEX = /^([A-Z0-9_]+)_([0-9a-f]{8})$/i;
+const TOKEN_REGEX = /^([A-Z0-9_]+)_([0-9a-f]{16})$/i;
 
 interface SessionKey {
   key: Buffer;
@@ -86,7 +86,7 @@ export class Tokenizer {
     }
 
     if (value.length > MAX_VALUE_LENGTH) {
-      throw new VaultError('Value exceeds maximum allowed length', 'VALUE_TOO_LARGE');
+      throw new TokenizationError('Value exceeds maximum allowed length', { session, category });
     }
 
     if (!this.isValidSession(session)) {
@@ -104,7 +104,7 @@ export class Tokenizer {
     hmac.update(combined);
     const hash = hmac.digest();
 
-    const hexSuffix = hash.subarray(0, 4).toString('hex');
+    const hexSuffix = hash.subarray(0, 8).toString('hex');
     const token = `${category.toUpperCase()}_${hexSuffix}` as Token;
 
     // Zero out HMAC digest after extracting the token suffix
@@ -200,7 +200,6 @@ export class Tokenizer {
     }
 
     const category = match[1].toLowerCase() as PatternType;
-    const categoryType = this.getCategoryForPattern(category);
 
     try {
       const retrieved = await this.vault.retrieve(token, category);
@@ -262,7 +261,7 @@ export class Tokenizer {
       return false;
     }
 
-    const [prefix, hexSuffix] = match.slice(1, 3);
+    const prefix = match[1];
 
     const prefixUpper = prefix.toUpperCase();
     const allPatternTypes: PatternType[] = [];
@@ -276,15 +275,6 @@ export class Tokenizer {
     }
 
     return true;
-  }
-
-  private getCategoryForPattern(pattern: PatternType): PatternCategory {
-    for (const [category, patterns] of TOKEN_PREFIXES) {
-      if (patterns.includes(pattern)) {
-        return category;
-      }
-    }
-    throw new TokenizationError('Unknown pattern type', { pattern });
   }
 
   clearSession(session: SessionId): void {
@@ -304,7 +294,21 @@ export class Tokenizer {
 }
 
 export function isValidToken(token: unknown): token is Token {
-  const tokenizer = new Tokenizer(new Vault(':memory:', 'dummy-key'));
-  return tokenizer.isValidToken(token);
+  if (typeof token !== 'string') {
+    return false;
+  }
+
+  const match = TOKEN_REGEX.exec(token);
+  if (!match) {
+    return false;
+  }
+
+  const prefix = match[1].toUpperCase();
+  const allPatternTypes: PatternType[] = [];
+  for (const patterns of TOKEN_PREFIXES.values()) {
+    allPatternTypes.push(...patterns);
+  }
+
+  return allPatternTypes.map(pt => pt.toString().toUpperCase()).includes(prefix);
 }
 

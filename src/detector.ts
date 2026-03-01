@@ -1,6 +1,6 @@
 import { DetectionResult, Pattern, PatternCategory } from './types.js';
 import { getPatterns, allPatterns } from './patterns/index.js';
-import { VaultError } from './errors.js';
+import { DetectionError } from './errors.js';
 
 export interface DetectorOptions {
   categories?: PatternCategory[];
@@ -33,7 +33,7 @@ export class Detector {
 
   detect(text: string): DetectionResult[] {
     if (text.length > this.maxInputLength) {
-      throw new VaultError('Input exceeds maximum allowed length', 'INPUT_TOO_LARGE');
+      throw new DetectionError('Input exceeds maximum allowed length', { code: 'INPUT_TOO_LARGE' });
     }
 
     const results: DetectionResult[] = [];

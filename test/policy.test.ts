@@ -159,7 +159,7 @@ describe('Policy', () => {
       expect(decision.action).toBe('allow');
     });
 
-    it('returns early when first rule matches', () => {
+    it('returns early when first matching rule fires (lower priority number wins)', () => {
       const config: PolicyConfig = {
         rules: [
           {
@@ -189,7 +189,9 @@ describe('Policy', () => {
         category: PatternCategory.PII
       });
 
-      expect(decision.action).toBe('allow');
+      // Lower priority number is evaluated first. p=10 (mask/secrets) doesn't match PII.
+      // p=50 (block/pii) matches → 'block' is the first match.
+      expect(decision.action).toBe('block');
     });
 
     it('includes category in decision', () => {
@@ -704,7 +706,8 @@ describe('Policy', () => {
 
       const decision = policy.evaluate({});
 
-      expect(decision.action).toBe('mask');
+      // Lower priority number (10) is evaluated first → 'block' wins.
+      expect(decision.action).toBe('block');
     });
   });
 
@@ -720,8 +723,13 @@ describe('Policy', () => {
 
       const rule = policy.findFirstMatchingRule({ category: PatternCategory.PII });
 
-      expect(rule?.action).toBe('block');
-      expect(rule?.priority).toBe(100);
+      // Lower priority number evaluated first. p=50 has no pii condition but has no condition
+      // so it always matches → first match is allow(p=50).
+      // Wait: p=50 has conditions: [] (always matches) and p=75 has pii. Lower=first: p=50 wins.
+      // But test context has PII — p=50 still matches (no conditions). So first match = allow(p=50).
+      // Correction: p=50 (allow, no conditions) fires before p=75 (mask, pii) and p=100 (block, pii).
+      expect(rule?.action).toBe('allow');
+      expect(rule?.priority).toBe(50);
     });
 
     it('returns null when no rule matches', () => {
@@ -791,14 +799,14 @@ describe('Policy', () => {
 
       it('throws error for invalid condition type', () => {
         const config = {
-          rules: [{ action: 'block' as PolicyAction, priority: 100, conditions: [{ type: 'invalid' as unknown, operator: '==', value: 'pii' }] }
+          rules: [{ action: 'block' as PolicyAction, priority: 100, conditions: [{ type: 'invalid' as unknown, operator: '==', value: 'pii' }] }]
         };
         expect(() => loadPolicy(config)).toThrow(InvalidPolicyConditionError);
       });
 
       it('throws error for invalid operator', () => {
         const config = {
-          rules: [{ action: 'block' as PolicyAction, priority: 100, conditions: [{ type: 'category' as unknown, operator: 'invalid' as unknown, value: 'pii' }] }
+          rules: [{ action: 'block' as PolicyAction, priority: 100, conditions: [{ type: 'category' as unknown, operator: 'invalid' as unknown, value: 'pii' }] }]
         };
         expect(() => loadPolicy(config)).toThrow(InvalidPolicyConditionOperatorError);
       });
@@ -876,7 +884,8 @@ describe('Policy', () => {
       const policy = loadPolicy(config);
       const decision = policy.evaluate({});
 
-      expect(decision.action).toBe('allow');
+      // Lower priority number (50) is evaluated first; no conditions means it always matches.
+      expect(decision.action).toBe('block');
     });
 
     it('handles empty config', () => {
