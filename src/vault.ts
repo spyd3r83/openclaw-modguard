@@ -70,10 +70,6 @@ function validateVaultPath(vaultPath: string): void {
   if (vaultPath !== ':memory:') {
     const absolutePath = path.resolve(vaultPath);
 
-    if (absolutePath.includes('..')) {
-      throw new VaultError('vaultPath cannot contain path traversal sequences', 'INVALID_PATH');
-    }
-
     if (absolutePath.includes('~') && !absolutePath.startsWith(process.env.HOME || '')) {
       throw new VaultError('vaultPath cannot contain tilde outside home directory', 'INVALID_PATH');
     }
@@ -226,7 +222,8 @@ export class Vault {
         auth_tag BLOB NOT NULL,
         salt BLOB NOT NULL,
         created_at INTEGER NOT NULL,
-        expires_at INTEGER
+        expires_at INTEGER,
+        UNIQUE(token, category)
       )
     `);
 
@@ -351,7 +348,7 @@ export class Vault {
     const expiresAt = options?.ttl ? now + options.ttl : null;
 
     const stmt = this.db.prepare(`
-      INSERT INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
+      INSERT OR REPLACE INTO entries (token, category, encrypted_value, iv, auth_tag, salt, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
