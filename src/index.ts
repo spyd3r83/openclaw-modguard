@@ -205,6 +205,7 @@ export function isValidToken(token: unknown): token is import('./tokenizer.js').
 }
 
 let apiRef: OpenClawPluginApi | null = null;
+let hooksRegistered = false;
 
 const guardPlugin = {
   id: 'modguard',
@@ -240,8 +241,9 @@ const guardPlugin = {
         
         // Register hooks after successful initialization
         if (apiRef) {
-          if (state.initialized) {
+          if (state.initialized && !hooksRegistered) {
             registerHooks(apiRef, state);
+            hooksRegistered = true;
             apiRef.logger.info('ModGuard hooks registered successfully');
           }
         }
@@ -298,8 +300,9 @@ const guardPlugin = {
       try {
         initializeModGuardState(vaultPath, masterKey);
         
-        if (state.initialized) {
+        if (state.initialized && !hooksRegistered) {
           registerHooks(api, state);
+          hooksRegistered = true;
           api.logger.info('ModGuard hooks registered successfully');
         }
       } catch (error) {

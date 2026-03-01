@@ -326,6 +326,138 @@ describe('schedulePatternBootstrap (via registerAgentSentry)', () => {
     expect(logs.some(l => l.includes('bootstrap failed'))).toBe(false);
   });
 
+  // ── BUG-046: snapshot consistency ────────────────────────────────────────
+
+  it('BUG-046: patternSnapshot in schedulePatternBootstrap uses length at call entry, not after push', async () => {
+    // Verify that the prompt sent to runPrompt reflects the pattern list as it
+    // was at the time schedulePatternBootstrap was called — not a later, grown list.
+    // We capture the prompt received by runPrompt and check it contains exactly
+    // the sources of the static patterns (no more, no less).
+    const sentry = makeMinimalSentry();
+    let capturedPrompt = '';
+    let bootstrapResolve!: () => void;
+    const bootstrapDone = new Promise<void>(r => { bootstrapResolve = r; });
+
+    const staticSources = [...INJECTION_PATTERNS].map(r => r.source);
+
+    const api = {
+      logger: {
+        info:  (msg: string) => {
+          if (msg.includes('model-derived injection patterns')) bootstrapResolve();
+        },
+        warn:  (msg: string) => {
+          if (msg.includes('bootstrap failed') || msg.includes('runPrompt unavailable')) bootstrapResolve();
+        },
+        error: (_msg: string) => {},
+      },
+      on: (_event: string, _handler: unknown) => {},
+      runPrompt: async (prompt: string): Promise<string> => {
+        capturedPrompt = prompt;
+        return '[]'; // no new patterns
+      },
+    };
+
+    const config = { ...defaultAgentSentryConfig, dynamicPatterns: true };
+    registerAgentSentry(api, sentry, config);
+    await bootstrapDone;
+
+    // The prompt must list each static pattern source exactly once
+    for (const source of staticSources) {
+      expect(capturedPrompt).toContain(source);
+    }
+    // The prompt must NOT contain sources of any patterns added after registration
+    // (since we pushed nothing, the count in the prompt should match the snapshot)
+    const promptPatternLines = capturedPrompt
+      .split('Existing patterns:\n')[1]
+      ?.split('\n')
+      .filter(l => l.trim().length > 0) ?? [];
+    expect(promptPatternLines.length).toBe(staticSources.length);
+  });
+
+  // ── BUG-047: explicit runPrompt guard ─────────────────────────────────────
+
+  it('BUG-047: schedulePatternBootstrap does not throw when runPrompt is undefined (outer guard bypassed)', async () => {
+    // Simulate calling registerAgentSentry without the outer runPrompt guard
+    // by passing dynamicPatterns=true and a non-function runPrompt value.
+    // The inner guard in schedulePatternBootstrap must prevent a TypeError.
+    // We test this by asserting the test completes without unhandled rejection.
+    const sentry = makeMinimalSentry();
+    const logs: string[] = [];
+
+    const api = {
+      logger: {
+        info:  (msg: string) => { logs.push(`[info] ${msg}`); },
+        warn:  (msg: string) => { logs.push(`[warn] ${msg}`); },
+        error: (msg: string) => { logs.push(`[error] ${msg}`); },
+      },
+      on: (_event: string, _handler: unknown) => {},
+      // runPrompt deliberately absent — outer guard would normally skip
+    };
+
+    // Calling with dynamicPatterns=true and no runPrompt triggers the outer
+    // guard, so bootstrap is skipped. Verify no error and no warning about bootstrap.
+    const config = { ...defaultAgentSentryConfig, dynamicPatterns: true };
+    registerAgentSentry(api, sentry, config);
+
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(INJECTION_PATTERNS.length).toBe(originalLength);
+    // The outer guard prevents bootstrap entirely — no warning logged
+    expect(logs.some(l => l.includes('bootstrap failed'))).toBe(false);
+    expect(logs.some(l => l.includes('runPrompt unavailable'))).toBe(false);
+  });
+
+  it('BUG-047: runPrompt explicit check — logs warning and returns cleanly when runPrompt is not a function inside the bootstrap function', async () => {
+    // To exercise the INTERNAL guard, we need to call schedulePatternBootstrap
+    // directly. Since it's not exported, we test it indirectly by monkey-patching
+    // api.runPrompt to undefined AFTER passing the outer guard check.
+    // We achieve this by passing an api where runPrompt is initially a function
+    // but becomes undefined before being called inside schedulePatternBootstrap.
+    const sentry = makeMinimalSentry();
+    const logs: string[] = [];
+    let bootstrapResolve!: () => void;
+    const bootstrapDone = new Promise<void>(r => { bootstrapResolve = r; });
+
+    // Use an api object whose runPrompt property is removed after registerAgentSentry
+    // reads it for the outer guard check but before the async body executes.
+    const api: {
+      logger: { info(m: string): void; warn(m: string): void; error(m: string): void };
+      on(e: string, h: unknown): void;
+      runPrompt?: (p: string) => Promise<string>;
+    } = {
+      logger: {
+        info:  (msg: string) => {
+          logs.push(`[info] ${msg}`);
+          if (msg.includes('AgentSentry registered')) {
+            // Remove runPrompt after outer guard has passed but before async body
+            delete api.runPrompt;
+            // Give async bootstrap a tick to start
+            Promise.resolve().then(() => {
+              // After the next microtask the internal guard will fire
+              setTimeout(bootstrapResolve, 50);
+            });
+          }
+        },
+        warn:  (msg: string) => {
+          logs.push(`[warn] ${msg}`);
+          if (msg.includes('runPrompt unavailable') || msg.includes('bootstrap failed')) bootstrapResolve();
+        },
+        error: (msg: string) => { logs.push(`[error] ${msg}`); },
+      },
+      on: (_event: string, _handler: unknown) => {},
+      runPrompt: async (_p: string): Promise<string> => '[]',
+    };
+
+    const config = { ...defaultAgentSentryConfig, dynamicPatterns: true };
+    registerAgentSentry(api, sentry, config);
+    await bootstrapDone;
+
+    // Either the internal guard fires (warn: runPrompt unavailable) or
+    // runPrompt was called successfully before deletion — either way no crash.
+    // The test passing without unhandled rejection is the primary assertion.
+    expect(INJECTION_PATTERNS.length).toBe(originalLength);
+  });
+
   it('does not log pattern content — only the count', async () => {
     const sentry = makeMinimalSentry();
     const logs: string[] = [];

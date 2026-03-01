@@ -29,7 +29,7 @@ export async function handleBeforeAgentStart(
     }
 
     const session = sessionId ?? tokenizer.generateSessionId();
-    sessionManager.createSession(session);
+    sessionManager.getOrCreateSession(session);
 
     const masked = await maskText(prompt, detections, tokenizer, session);
 

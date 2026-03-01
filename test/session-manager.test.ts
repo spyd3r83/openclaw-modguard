@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SessionManager } from '../src/session-manager.js';
 import type { Token } from '../src/tokenizer.js';
 
@@ -6,7 +6,11 @@ describe('SessionManager', () => {
   let sessionManager: SessionManager;
 
   beforeEach(() => {
-    sessionManager = new SessionManager();
+    sessionManager = new SessionManager({ cleanupIntervalMs: 60_000 });
+  });
+
+  afterEach(() => {
+    sessionManager.destroy();
   });
 
   describe('createSession', () => {
@@ -26,7 +30,8 @@ describe('SessionManager', () => {
       const context1 = sessionManager.createSession(sessionId);
       const context2 = sessionManager.createSession(sessionId);
 
-      expect(context1).not.toBe(context2);
+      // BUG-042 fix: idempotent — same object reference returned for live session
+      expect(context1).toBe(context2);
       expect(sessionManager.getSessionCount()).toBe(1);
     });
   });
@@ -292,6 +297,61 @@ describe('SessionManager', () => {
 
       expect(sessionManager.getSessionCount()).toBe(0);
       expect(sessionManager.getSession('session-1')).toBeUndefined();
+    });
+  });
+
+  // BUG-042 regression: multi-turn conversations must not lose prior tokens
+  describe('getOrCreateSession (BUG-042)', () => {
+    it('second turn with same sessionId reuses existing session and retains tokens from first turn', () => {
+      const sessionId = 'multi-turn-session';
+      const token1 = 'EMAIL_aabbccdd' as Token;
+      const originalValue = 'alice@example.com';
+
+      // Simulate first turn: session created and a token stored
+      sessionManager.addToken(sessionId, token1, originalValue);
+      expect(sessionManager.hasToken(sessionId, token1)).toBe(true);
+
+      // Simulate second turn: hook calls getOrCreateSession again
+      const ctx = sessionManager.getOrCreateSession(sessionId);
+
+      // Must return the same session — token from turn 1 must still be present
+      expect(ctx.sessionId).toBe(sessionId);
+      expect(ctx.tokens.get(token1)).toBe(originalValue);
+      expect(sessionManager.getSessionCount()).toBe(1);
+    });
+
+    it('createSession on expired session creates a fresh session', () => {
+      const sessionId = 'expiring-session';
+      const shortTtlManager = new SessionManager({ ttlMs: 50, cleanupIntervalMs: 60_000 });
+      try {
+        const token = 'SSN_deadbeef' as Token;
+        shortTtlManager.addToken(sessionId, token, '123-45-6789');
+
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            // After TTL the old session is gone; createSession makes a new one
+            const fresh = shortTtlManager.createSession(sessionId);
+            expect(fresh.tokens.size).toBe(0);
+            resolve();
+          }, 100);
+        });
+      } finally {
+        shortTtlManager.destroy();
+      }
+    });
+  });
+
+  // BUG-052 regression: destroy() clears the background cleanup interval
+  describe('destroy (BUG-052)', () => {
+    it('destroy() clears the interval without throwing', () => {
+      const manager = new SessionManager({ cleanupIntervalMs: 60_000 });
+      expect(() => manager.destroy()).not.toThrow();
+    });
+
+    it('destroy() is idempotent — calling it twice does not throw', () => {
+      const manager = new SessionManager({ cleanupIntervalMs: 60_000 });
+      manager.destroy();
+      expect(() => manager.destroy()).not.toThrow();
     });
   });
 });

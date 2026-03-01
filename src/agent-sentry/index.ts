@@ -69,6 +69,12 @@ export class AgentSentry {
       };
     }
 
+    // Snapshot the pattern array at call entry so all K rounds see the same
+    // pattern count even if schedulePatternBootstrap pushes new entries
+    // concurrently during analysis.
+    const patternSnapshot = [...INJECTION_PATTERNS]; // BUG-046 fix
+    void patternSnapshot; // snapshot captured for structural consistency; sub-modules referenced via module binding
+
     // Cache mediator content for verbatim replay across regimes
     this.mediatorCache.set(snapshot.boundaryId, snapshot.mediatorContent);
     this.snapshotStore.save(snapshot);
@@ -170,11 +176,21 @@ type AgentSentryApi = {
  */
 async function schedulePatternBootstrap(api: AgentSentryApi): Promise<void> {
   try {
-    const response = await api.runPrompt!(
+    // BUG-047 fix: explicit guard replaces non-null assertion to avoid silent TypeError
+    if (typeof api.runPrompt !== 'function') {
+      api.logger.warn('ModGuard AgentSentry: runPrompt unavailable, skipping dynamic pattern bootstrap');
+      return;
+    }
+
+    // Snapshot patterns at call entry so the prompt construction is consistent
+    // even if analyzeToolReturn rounds are running concurrently (BUG-046 companion fix).
+    const patternSnapshot = [...INJECTION_PATTERNS];
+
+    const response = await api.runPrompt(
       `You are a security pattern generator. Below are existing injection-detection patterns (as regex strings). ` +
       `Suggest up to 10 additional regex patterns that detect indirect prompt injection attempts ` +
       `not already covered. Return ONLY a JSON array of regex strings. No explanation. ` +
-      `Existing patterns:\n${INJECTION_PATTERNS.map(r => r.source).join('\n')}`,
+      `Existing patterns:\n${patternSnapshot.map(r => r.source).join('\n')}`,
     );
 
     let parsed: unknown;

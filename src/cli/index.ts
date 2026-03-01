@@ -908,7 +908,8 @@ function parseDuration(duration: string): number {
 function calculateSpaceFreed(db: any, ids: number[]): number {
   if (ids.length === 0) return 0;
 
-  const sizes = db.prepare('SELECT LENGTH(encrypted_value) + LENGTH(iv) + LENGTH(auth_tag) as size FROM entries WHERE id = ?').all(...ids);
+  const placeholders = ids.map(() => '?').join(',');
+  const sizes = db.prepare(`SELECT LENGTH(encrypted_value) + LENGTH(iv) + LENGTH(auth_tag) as size FROM entries WHERE id IN (${placeholders})`).all(...ids);
   return sizes.reduce((sum: number, row: any) => sum + (row.size || 0), 0);
 }
 

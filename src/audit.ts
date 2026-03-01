@@ -31,6 +31,9 @@ interface WriteQueueItem {
   reject: (reason?: unknown) => void;
 }
 
+// Lines buffered before the file handle is opened (BUG-044).
+type PendingLine = string;
+
 interface SignedAuditEntry extends AuditEntry {
   signature: string;
 }
@@ -46,6 +49,8 @@ export class AuditLogger {
   private sequenceCache: Set<number>;
   private minLevel: LogLevel;
   private auditKey: Buffer;
+  /** Lines queued before the file handle is ready (BUG-044 fix). */
+  private pendingWrites: PendingLine[];
 
   constructor(logDir?: string, retentionPolicy?: Partial<RetentionPolicy>, minLevel: LogLevel = 'info', auditKey?: string | Buffer) {
     this.logDir = logDir || path.join(process.env.HOME || process.cwd(), DEFAULT_LOG_DIR);
@@ -54,6 +59,7 @@ export class AuditLogger {
     this.writeQueue = [];
     this.isWriting = false;
     this.fileHandle = null;
+    this.pendingWrites = [];
     this.minLevel = minLevel;
     this.sequenceCache = new Set();
     this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || crypto.randomBytes(32);
@@ -76,6 +82,15 @@ export class AuditLogger {
     }
 
     this.fileHandle = await open(this.logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
+
+    // BUG-044 fix: flush any writes that were queued before the handle was ready.
+    if (this.pendingWrites.length > 0) {
+      const lines = this.pendingWrites;
+      this.pendingWrites = [];
+      for (const line of lines) {
+        await this.fileHandle.write(line);
+      }
+    }
   }
 
   async log(entry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'>): Promise<void> {
@@ -373,6 +388,14 @@ export class AuditLogger {
       if (deletedCount > 0) {
         await fs.writeFile(this.logPath, filteredLines.join('\n'), { mode: 0o600 });
         await this.loadSequenceNumber();
+
+        // BUG-045 fix: the append file handle's internal position is now stale
+        // because writeFile truncated and rewrote the file underneath it.
+        // Close and reopen so subsequent appends land at the correct EOF offset.
+        if (this.fileHandle) {
+          await this.fileHandle.close();
+          this.fileHandle = await open(this.logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
+        }
       }
 
       return deletedCount;
@@ -410,6 +433,9 @@ export class AuditLogger {
 
         if (this.fileHandle) {
           await this.fileHandle.write(line);
+        } else {
+          // BUG-044 fix: file handle not yet open — buffer for flushing in initialize().
+          this.pendingWrites.push(line);
         }
 
         if (this.retentionPolicy.enabled && item.entry.sequence % 100 === 0) {

@@ -20,7 +20,7 @@ export const secretsPatterns: Pattern[] = [
   {
     type: PatternType.PEM_BLOCK,
     category: PatternCategory.SECRETS,
-    regex: /-----BEGIN[A-Z\s]*(?:PRIVATE KEY|CERTIFICATE|PUBLIC KEY)-----[\s\S]+?-----END[A-Z\s]*(?:PRIVATE KEY|CERTIFICATE|PUBLIC KEY)-----/gi,
+    regex: /-----BEGIN ([A-Z0-9 ]*(?:CERTIFICATE REQUEST|CERTIFICATE|PRIVATE KEY|PUBLIC KEY|OPENSSH PRIVATE KEY))-----[\s\S]+?-----END \1-----/g,
     confidence: 1.0,
     description: 'PEM-encoded private key or certificate',
     examples: [

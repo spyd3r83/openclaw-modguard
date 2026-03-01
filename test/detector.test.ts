@@ -527,6 +527,15 @@ describe('Detector', () => {
       const phones = results.filter((r) => r.pattern === PatternType.PHONE);
       expect(phones).toHaveLength(3);
     });
+
+    it('should not match phone within a continuous 16-digit credit card number', () => {
+      const detector = new Detector();
+      // 4111111111111111 is a valid Visa number with no separators — must not trigger phone
+      const results = detector.detect('4111111111111111');
+
+      const phones = results.filter((r) => r.pattern === PatternType.PHONE);
+      expect(phones).toHaveLength(0);
+    });
   });
 
   describe('SSN edge cases', () => {
@@ -768,6 +777,26 @@ describe('Detector', () => {
       const pems = results.filter((r) => r.pattern === PatternType.PEM_BLOCK);
       expect(pems).toHaveLength(1);
     });
+
+    it('should not match PEM block when BEGIN and END labels differ', () => {
+      const detector = new Detector();
+      const results = detector.detect(
+        '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAz7\n-----END CERTIFICATE-----'
+      );
+
+      const pems = results.filter((r) => r.pattern === PatternType.PEM_BLOCK);
+      expect(pems).toHaveLength(0);
+    });
+
+    it('should match PEM block when BEGIN and END labels are identical', () => {
+      const detector = new Detector();
+      const results = detector.detect(
+        '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAz7\n-----END RSA PRIVATE KEY-----'
+      );
+
+      const pems = results.filter((r) => r.pattern === PatternType.PEM_BLOCK);
+      expect(pems).toHaveLength(1);
+    });
   });
 
   describe('IPv4 edge cases', () => {
@@ -803,6 +832,15 @@ describe('Detector', () => {
 
       const ips = results.filter((r) => r.pattern === PatternType.IPV6);
       expect(ips.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should detect :: (all-zeros compressed IPv6 address)', () => {
+      const detector = new Detector();
+      const results = detector.detect('The unspecified address is ::');
+
+      const ips = results.filter((r) => r.pattern === PatternType.IPV6);
+      expect(ips.length).toBeGreaterThanOrEqual(1);
+      expect(ips.some((ip) => ip.match === '::')).toBe(true);
     });
   });
  
