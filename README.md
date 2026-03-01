@@ -6,37 +6,15 @@ OpenClaw ModGuard protects sensitive information in AI agent conversations by de
 
 ## Quick Start
 
-### 1. Install the Plugin
-
 ```bash
-openclaw plugins install openclaw-modguard
+git clone https://github.com/spyd3r83/openclaw-modguard.git
+cd openclaw-modguard
+./install.sh
 ```
 
-### 2. Configure
+The installer builds the plugin, copies files to `~/.openclaw/extensions/modguard/`, generates a master key, and patches `~/.openclaw/openclaw.json` automatically. Then restart OpenClaw — look for `OpenClaw ModGuard plugin registered` in the logs.
 
-```bash
-# Generate a secure master key
-export MODGUARD_MASTER_KEY=$(openssl rand -base64 32)
-
-# Add to OpenClaw config (~/.openclaw/config.yaml)
-echo "plugins:
-  modguard:
-    masterKey: \${MODGUARD_MASTER_KEY}" >> ~/.openclaw/config.yaml
-```
-
-### 3. Restart OpenClaw & Verify
-
-```bash
-# Restart OpenClaw (method depends on your setup)
-systemctl restart openclaw  # or: docker compose restart
-
-# Verify installation
-openclaw plugins list        # Should show "modguard"
-openclaw modguard status     # Should show "Active"
-openclaw modguard detect "Contact: user@example.com"
-```
-
-**See [Installation Guide](docs/installation.md) for detailed instructions.**
+**See [Installation Guide](docs/installation.md) for detailed instructions, manual install steps, and troubleshooting.**
 
 ## Features
 
