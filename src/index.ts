@@ -306,7 +306,7 @@ const guardPlugin = {
           api.logger.info('ModGuard hooks registered successfully');
         }
       } catch (error) {
-        const safeMsg = error instanceof VaultError ? error.message : 'Initialization failed';
+        const safeMsg = error instanceof VaultError ? 'Vault initialization failed' : 'Initialization failed';
         api.logger.error(`ModGuard initialization failed: ${safeMsg}`);
       }
     } else {

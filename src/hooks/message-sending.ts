@@ -22,6 +22,13 @@ export async function handleMessageSending(
     return {};
   }
 
+  // Skip detokenization for known internal channels (api, cli, internal).
+  // All other channels (Discord, Telegram, Slack, custom) receive unmasked content.
+  const INTERNAL_CHANNELS = ['api', 'cli', 'internal'];
+  if (INTERNAL_CHANNELS.includes(context.channelId.toLowerCase())) {
+    return {};
+  }
+
   if (!sessionId) {
     console.warn('No sessionId provided in message_sending hook, cannot unmask tokens');
     return {};

@@ -557,6 +557,15 @@ export class Vault {
     return result.changes;
   }
 
+  entryCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM entries').get() as { n: number };
+    return row.n;
+  }
+
+  getVaultPath(): string {
+    return this.vaultPath;
+  }
+
   close(): void {
     this.db.close();
   }

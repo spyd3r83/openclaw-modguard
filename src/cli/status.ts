@@ -18,6 +18,7 @@ interface OpenClawPluginApi {
 
 interface ModGuardStatus {
   pluginActive: boolean;
+  vaultPath: string;
   sessionCount: number;
   vaultEntryCount: number;
   cacheStats: {
@@ -56,8 +57,9 @@ export function registerModGuardStatus(api: OpenClawPluginApi): void {
 
       const status: ModGuardStatus = {
         pluginActive: true,
-        sessionCount: 0,
-        vaultEntryCount: 0,
+        vaultPath: state.vault.getVaultPath(),
+        sessionCount: 0, // TODO: expose SessionManager from hooks/index.ts to get live count
+        vaultEntryCount: state.vault.entryCount(),
         cacheStats: {
           hits: 0,
           misses: 0,
@@ -88,6 +90,7 @@ function formatStatus(status: ModGuardStatus): string {
   lines.push('');
 
   lines.push(`Plugin Status: ${status.pluginActive ? '✓ Active' : '✗ Inactive'}`);
+  lines.push(`Vault Path: ${status.vaultPath}`);
   lines.push(`Session Count: ${status.sessionCount}`);
   lines.push(`Vault Entries: ${status.vaultEntryCount}`);
   lines.push('');
