@@ -845,7 +845,7 @@ describe('Detector', () => {
   });
  
   describe('negative test cases', () => {
-    it('should not detect SSN-like product codes', () => {
+    it('should detect SSN-like product codes (known false positive — 123-45-NNNN format matches SSN regex)', () => {
       const detector = new Detector();
       const results = detector.detect('Product code: 123-45-6789 is a valid SKU');
 
@@ -1041,6 +1041,33 @@ describe('Detector', () => {
       expect(emails).toHaveLength(1);
       expect(ssns).toHaveLength(1);
       expect(phones).toHaveLength(1);
+    });
+  });
+
+  describe('streaming limitations (known gaps)', () => {
+    it('cross-chunk email split at @ is a known false negative — each chunk detects 0 emails', () => {
+      // BUG-054: Detector operates on complete strings only. Patterns that span
+      // chunk boundaries (e.g. an email split as 'user@' / 'example.com') are
+      // silently missed. No streaming buffer exists. This test documents the miss.
+      const detector = new Detector();
+      const chunk1 = detector.detect('Send it to user@');
+      const chunk2 = detector.detect('example.com please');
+      const emails1 = chunk1.filter((r) => r.pattern === PatternType.EMAIL);
+      const emails2 = chunk2.filter((r) => r.pattern === PatternType.EMAIL);
+      // Each chunk alone yields 0 email detections — the split address is missed.
+      expect(emails1).toHaveLength(0);
+      expect(emails2).toHaveLength(0);
+    });
+
+    it('cross-chunk IP split at dot is a known false negative', () => {
+      // BUG-054: Same limitation for IPv4 addresses split mid-octet.
+      const detector = new Detector();
+      const chunk1 = detector.detect('connecting from 192.168.');
+      const chunk2 = detector.detect('1.1 now');
+      const ips1 = chunk1.filter((r) => r.pattern === PatternType.IPV4);
+      const ips2 = chunk2.filter((r) => r.pattern === PatternType.IPV4);
+      expect(ips1).toHaveLength(0);
+      expect(ips2).toHaveLength(0);
     });
   });
 });

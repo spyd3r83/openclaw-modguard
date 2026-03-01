@@ -82,7 +82,7 @@ async function maskText(
     });
   }
 
-  segments.sort((a, b) => a.start - b.start);
+  segments.sort((a, b) => a.start - b.start); // redundant but harmless — detections arrive pre-sorted
 
   let result = '';
   let pos = 0;
