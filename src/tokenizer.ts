@@ -16,7 +16,7 @@ const TOKEN_PREFIXES = new Map<PatternCategory, PatternType[]>([
   [PatternCategory.NETWORK, [PatternType.IPV4, PatternType.IPV6]]
 ]);
 
-const TOKEN_REGEX = /^([A-Z0-9_]+)_([0-9a-f]{8})$/i;
+const TOKEN_REGEX = /^([A-Z0-9_]+)_([0-9a-f]{16})$/i;
 
 interface SessionKey {
   key: Buffer;
@@ -104,7 +104,7 @@ export class Tokenizer {
     hmac.update(combined);
     const hash = hmac.digest();
 
-    const hexSuffix = hash.subarray(0, 4).toString('hex');
+    const hexSuffix = hash.subarray(0, 8).toString('hex');
     const token = `${category.toUpperCase()}_${hexSuffix}` as Token;
 
     // Zero out HMAC digest after extracting the token suffix

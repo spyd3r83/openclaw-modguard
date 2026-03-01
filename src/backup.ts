@@ -402,7 +402,7 @@ export async function vaultRepair(
       const issues: string[] = [];
 
       // Check token format
-      if (!entry.token || !/^[A-Z_]+_[0-9a-f]{8}$/i.test(entry.token)) {
+      if (!entry.token || !/^[A-Z_]+_[0-9a-f]{16}$/i.test(entry.token)) {
         issues.push('invalid_token_format');
       }
 

@@ -1,6 +1,5 @@
 import { Tokenizer, SessionId, isValidToken } from '../tokenizer.js';
 import { SessionManager } from '../session-manager.js';
-import { DetokenizationError } from '../errors.js';
 import type { MessageSendingContext } from '../index.js';
 
 interface MessageSendingOptions {
@@ -8,7 +7,9 @@ interface MessageSendingOptions {
   sessionManager: SessionManager;
 }
 
-const TOKEN_PATTERN = /\b([A-Z][A-Z0-9_]+_[0-9a-f]{8})\b/g;
+// Token suffix length must match Tokenizer.tokenize() output: 8 bytes = 16 hex chars.
+// NOTE: keep in sync with TOKEN_REGEX in tokenizer.ts.
+const TOKEN_PATTERN = /\b([A-Z][A-Z0-9_]+_[0-9a-f]{16})\b/g;
 
 export async function handleMessageSending(
   context: MessageSendingContext,
@@ -47,6 +48,11 @@ export async function handleMessageSending(
 }
 
 function findTokens(text: string): string[] {
+  // BUG-036: Reset lastIndex before each use to prevent stale state from
+  // a previous call leaving a non-zero lastIndex, which would cause the
+  // regex engine to start mid-string and miss leading tokens.
+  TOKEN_PATTERN.lastIndex = 0;
+
   const tokens: string[] = [];
   const seen = new Set<string>();
 
@@ -66,7 +72,8 @@ async function unmaskTokens(
   text: string,
   tokens: string[],
   tokenizer: Tokenizer,
-  session: SessionId
+  session: SessionId,
+  logger?: { warn(msg: string): void }
 ): Promise<string> {
   let result = text;
 
@@ -76,7 +83,16 @@ async function unmaskTokens(
       const tokenRegex = new RegExp(`\\b${token}\\b`, 'g');
       result = result.replace(tokenRegex, originalValue);
     } catch (_error) {
-      throw new DetokenizationError(`Failed to unmask token ${token}`, { token, session });
+      // BUG-037: Do NOT rethrow — a single stale/expired token must not abort
+      // unmasking of all remaining tokens.
+      // Log token ID only (no original value) per security rule 2 (no PII in logs).
+      const msg = `ModGuard: detokenization failed for token ${token} in session ${session}`;
+      if (logger) {
+        logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
+      // Leave the token placeholder in the result and continue.
     }
   }
 
