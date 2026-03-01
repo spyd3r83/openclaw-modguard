@@ -161,6 +161,50 @@ export class AuditRetentionPolicyError extends AuditError {
   }
 }
 
+export class BackupError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'BackupError';
+    Object.setPrototypeOf(this, BackupError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code
+    };
+  }
+}
+
+export class BackupVerifyError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_VERIFY_FAILED', context);
+    this.name = 'BackupVerifyError';
+    Object.setPrototypeOf(this, BackupVerifyError.prototype);
+  }
+}
+
+export class BackupRestoreError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_RESTORE_FAILED', context);
+    this.name = 'BackupRestoreError';
+    Object.setPrototypeOf(this, BackupRestoreError.prototype);
+  }
+}
+
+export class BackupRepairError extends BackupError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BACKUP_REPAIR_FAILED', context);
+    this.name = 'BackupRepairError';
+    Object.setPrototypeOf(this, BackupRepairError.prototype);
+  }
+}
+
 export class DetectionError extends VaultError {
   constructor(message: string, context?: Record<string, unknown>) {
     super(message, 'DETECTION_FAILED', context);

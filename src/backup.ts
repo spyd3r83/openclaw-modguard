@@ -1,6 +1,13 @@
 import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
 import * as crypto from 'node:crypto';
 import Database from 'better-sqlite3';
+import {
+  BackupVerifyError,
+  BackupRestoreError,
+  BackupRepairError
+} from './errors.js';
+import { timingSafeStringEqual } from './security.js';
 
 export interface BackupMetadata {
   version: string;
@@ -146,7 +153,7 @@ export async function vaultBackup(
     // Verify backup integrity after creation
     const verified = await verifyBackup(outputPath);
     if (!verified.valid) {
-      throw new Error('Backup verification failed: ' + verified.error);
+      throw new BackupVerifyError('Backup verification failed after write', { reason: verified.error });
     }
 
     return {
@@ -220,7 +227,7 @@ export async function verifyBackup(backupPath: string): Promise<VerifyBackupResu
       .update(checksumData)
       .digest('hex');
 
-    if (calculatedChecksum !== metadata.checksum) {
+    if (!timingSafeStringEqual(calculatedChecksum, metadata.checksum)) {
       return { valid: false, error: 'Checksum verification failed' };
     }
 
@@ -232,7 +239,7 @@ export async function verifyBackup(backupPath: string): Promise<VerifyBackupResu
   } catch (error) {
     return {
       valid: false,
-      error: `Failed to read backup: ${error}`
+      error: `Failed to read backup: ${error instanceof Error ? error.message : 'unknown error'}`
     };
   }
 }
@@ -248,7 +255,7 @@ export async function vaultRestore(
   // Verify backup first
   const verification = await verifyBackup(backupPath);
   if (!verification.valid) {
-    throw new Error(`Invalid backup file: ${verification.error}`);
+    throw new BackupRestoreError('Invalid backup file', { reason: verification.error });
   }
 
   const content = await fs.readFile(backupPath, 'utf-8');
@@ -273,10 +280,13 @@ export async function vaultRestore(
   }
 
   if (vaultExists && !options.force && !options.merge) {
-    throw new Error('Vault already exists. Use --force to overwrite or --merge to append.');
+    throw new BackupRestoreError('Vault already exists', { hint: 'use force to overwrite or merge to append' });
   }
 
   const db = new Database(vaultPath);
+  if (vaultPath !== ':memory:') {
+    fsSync.chmodSync(vaultPath, 0o600);
+  }
 
   try {
     // Initialize schema if new vault
@@ -384,6 +394,9 @@ export async function vaultRepair(
   }
 
   const db = new Database(vaultPath);
+  if (vaultPath !== ':memory:') {
+    fsSync.chmodSync(vaultPath, 0o600);
+  }
 
   try {
     let entriesRepaired = 0;
@@ -479,7 +492,7 @@ export async function vaultRepair(
     const isIntact = integrityCheck[0]?.integrity_check === 'ok';
 
     if (!isIntact) {
-      throw new Error('Database integrity check failed after repair');
+      throw new BackupRepairError('Database integrity check failed after repair');
     }
 
     return {

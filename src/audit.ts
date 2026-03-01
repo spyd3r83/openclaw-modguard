@@ -157,7 +157,7 @@ export class AuditLogger {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return [];
       }
-      throw new AuditReadError('Failed to read audit log', { error });
+      throw new AuditReadError('Failed to read audit log', { reason: error instanceof Error ? error.message : 'unknown error' });
     }
   }
 
@@ -403,7 +403,7 @@ export class AuditLogger {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return 0;
       }
-      throw new AuditRetentionPolicyError('Failed to apply retention policy', { error });
+      throw new AuditRetentionPolicyError('Failed to apply retention policy', { reason: error instanceof Error ? error.message : 'unknown error' });
     }
   }
 
@@ -633,7 +633,10 @@ export function initializeGlobalAuditLogger(options?: {
     options?.minLevel
   );
 
-  void globalAuditLogger.initialize();
+  void globalAuditLogger.initialize().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : 'unknown error';
+    console.error(`ModGuard audit logger initialization failed: ${msg}`);
+  });
 
   return globalAuditLogger;
 }
