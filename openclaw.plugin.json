@@ -11,6 +11,17 @@
       "masterKey": {
         "type": "string",
         "description": "Master encryption key for vault"
+      },
+      "agentSentry": {
+        "type": "object",
+        "properties": {
+          "enabled":         { "type": "boolean" },
+          "K":               { "type": "number" },
+          "windowSize":      { "type": "number" },
+          "gamma":           { "type": "number" },
+          "diagnosticProbe": { "type": "string" },
+          "dryRunTimeoutMs": { "type": "number" }
+        }
       }
     }
   }

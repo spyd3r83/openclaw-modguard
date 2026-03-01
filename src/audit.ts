@@ -164,7 +164,8 @@ export class AuditLogger {
       vault_store: 0,
       vault_retrieve: 0,
       vault_cleanup: 0,
-      cli: 0
+      cli: 0,
+      ipi_detect: 0,
     };
 
     const categoryCounts: Record<string, number> = {};

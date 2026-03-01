@@ -168,3 +168,50 @@ export class DetectionError extends VaultError {
     Object.setPrototypeOf(this, DetectionError.prototype);
   }
 }
+
+export class IpiError extends Error {
+  constructor(message: string, public readonly context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'IpiError';
+    Object.setPrototypeOf(this, IpiError.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message
+    };
+  }
+}
+
+export class CounterfactualError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'CounterfactualError';
+    Object.setPrototypeOf(this, CounterfactualError.prototype);
+  }
+}
+
+export class RiskEstimationError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'RiskEstimationError';
+    Object.setPrototypeOf(this, RiskEstimationError.prototype);
+  }
+}
+
+export class PurificationError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'PurificationError';
+    Object.setPrototypeOf(this, PurificationError.prototype);
+  }
+}
+
+export class PolicyGateError extends IpiError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, context);
+    this.name = 'PolicyGateError';
+    Object.setPrototypeOf(this, PolicyGateError.prototype);
+  }
+}

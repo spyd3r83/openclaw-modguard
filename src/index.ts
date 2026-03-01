@@ -61,7 +61,11 @@ export type {
   AgentEndContext,
   BeforeAgentStartHandler,
   MessageSendingHandler,
-  AgentEndHandler
+  AgentEndHandler,
+  BeforeToolResultContext,
+  DryRunContext,
+  BeforeToolResultHandler,
+  DryRunHandler,
 };
 
 interface BeforeAgentStartContext {
@@ -87,6 +91,24 @@ type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ p
 type MessageSendingHandler = (context: MessageSendingContext) => Promise<{ content?: string } | void>;
 type AgentEndHandler = (context: AgentEndContext) => Promise<void>;
 
+interface BeforeToolResultContext {
+  sessionId: string;
+  toolName: string;
+  toolOutput: string;
+  dialogueHistory: string[];
+  userGoal: string;
+}
+
+interface DryRunContext {
+  sessionId: string;
+  userInput: string;
+  mediatorContent: string;
+  record: boolean;
+}
+
+type BeforeToolResultHandler = (context: BeforeToolResultContext) => Promise<{ toolOutput?: string; cancel?: boolean } | void>;
+type DryRunHandler = (context: DryRunContext) => Promise<{ proposedAction: import('./agent-sentry/types.js').ProposedAction } | void>;
+
 interface OpenClawPluginApi {
   logger: {
     info(message: string): void;
@@ -105,6 +127,9 @@ interface OpenClawPluginApi {
   on(event: 'before_agent_start', handler: BeforeAgentStartHandler): void;
   on(event: 'message_sending', handler: MessageSendingHandler): void;
   on(event: 'agent_end', handler: AgentEndHandler): void;
+  on(event: 'before_tool_result', handler: BeforeToolResultHandler): void;
+  on(event: 'dry_run', handler: DryRunHandler): void;
+  on(event: string, handler: (...args: unknown[]) => unknown): void;
 }
 
 
@@ -167,7 +192,8 @@ const guardPlugin = {
         return { success: false, error: 'masterKey must be a string' };
       }
 
-      const extraKeys = Object.keys(config).filter(k => k !== 'vaultPath' && k !== 'masterKey');
+      const allowedKeys = ['vaultPath', 'masterKey', 'agentSentry'];
+      const extraKeys = Object.keys(config).filter(k => !allowedKeys.includes(k));
       if (extraKeys.length > 0) {
         return { success: false, error: `Unknown config properties: ${extraKeys.join(', ')}` };
       }
@@ -193,6 +219,18 @@ const guardPlugin = {
         masterKey: {
           type: 'string',
           description: 'Master encryption key for vault'
+        },
+        agentSentry: {
+          type: 'object',
+          description: 'AgentSentry IPI detection configuration',
+          properties: {
+            enabled: { type: 'boolean' },
+            K: { type: 'number' },
+            windowSize: { type: 'number' },
+            gamma: { type: 'number' },
+            diagnosticProbe: { type: 'string' },
+            dryRunTimeoutMs: { type: 'number' },
+          },
         }
       }
     }
