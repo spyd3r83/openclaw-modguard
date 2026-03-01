@@ -95,8 +95,12 @@ if [[ -f "pnpm-lock.yaml" ]]; then
   pnpm install --frozen-lockfile 2>/dev/null || pnpm install
   pnpm build
 else
-  npm install
-  npm run build
+  echo "" >&2
+  echo "ERROR: pnpm-lock.yaml not found." >&2
+  echo "       This repository requires pnpm >= 10. Install pnpm and re-run:" >&2
+  echo "         npm install -g pnpm@latest" >&2
+  echo "       Then run: pnpm install && pnpm build" >&2
+  exit 1
 fi
 
 # Verify the build produced dist/index.js
