@@ -139,7 +139,7 @@ describe('BUG-032: before_tool_call enforcement — full hook dispatch integrati
     expect(result).toBeDefined();
     expect(result?.block).toBe(true);
     expect(typeof result?.blockReason).toBe('string');
-    expect(api.logs.some((l) => l.includes('AgentSentry: blocking'))).toBe(true);
+    expect(api.logs.some((l) => l.includes('ModGuard AgentSentry: blocking'))).toBe(true);
   });
 
   // Array content result (structured tool adapters)

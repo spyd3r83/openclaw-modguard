@@ -20,7 +20,8 @@
           "windowSize":      { "type": "number" },
           "gamma":           { "type": "number" },
           "diagnosticProbe": { "type": "string" },
-          "dryRunTimeoutMs": { "type": "number" }
+          "dryRunTimeoutMs": { "type": "number" },
+          "dynamicPatterns": { "type": "boolean" }
         }
       }
     }

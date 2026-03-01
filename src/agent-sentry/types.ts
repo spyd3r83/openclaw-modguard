@@ -83,6 +83,8 @@ export interface AgentSentryConfig {
   gamma: number;
   diagnosticProbe: string;
   dryRunTimeoutMs: number;
+  /** If true (default), augment INJECTION_PATTERNS at startup via a model call. */
+  dynamicPatterns?: boolean;
 }
 
 export interface AgentSentryDecision {

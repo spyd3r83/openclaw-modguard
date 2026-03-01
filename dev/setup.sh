@@ -99,7 +99,16 @@ else
   npm run build
 fi
 
-# Check if production Docker image exists
+# Verify the build produced dist/index.js
+if [[ ! -f "$PROJECT_ROOT/dist/index.js" ]]; then
+  echo "" >&2
+  echo "ERROR: Build did not produce dist/index.js" >&2
+  echo "       Run 'pnpm build' manually and check for TypeScript errors." >&2
+  exit 1
+fi
+echo "==> Build verified: dist/index.js exists"
+
+# Check if OpenClaw Docker image exists
 if ! docker image inspect "$OPENCLAW_IMAGE" >/dev/null 2>&1; then
   echo ""
   echo "==> Building OpenClaw Docker image"

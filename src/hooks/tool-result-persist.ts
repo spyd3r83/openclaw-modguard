@@ -85,9 +85,9 @@ export function startToolResultAnalysis(
     (err) => {
       // Rule #1: no raw error to caller; rule #2: no content in logs
       if (err instanceof IpiError) {
-        logger.error(`AgentSentry analysis failed: ${err.name}`);
+        logger.error(`ModGuard AgentSentry analysis failed: ${err.name}`);
       } else {
-        logger.error('AgentSentry analysis failed');
+        logger.error('ModGuard AgentSentry analysis failed');
       }
       return { takeover: false, R: 0, boundaryId };
     },

@@ -35,9 +35,17 @@ docker compose -f dev/docker-compose.yml run --rm openclaw-cli plugins list
 # Stop
 docker compose -f dev/docker-compose.yml down
 
-# Restart after code changes
+# Rebuild and restart after source changes (canonical workflow)
+./dev/rebuild.sh
+
+# Equivalent manual steps (rebuild.sh does both):
 pnpm build && docker compose -f dev/docker-compose.yml restart openclaw-gateway
 ```
+
+> **Important:** After any source change, always use `./dev/rebuild.sh` (or the
+> `pnpm build && docker compose restart` sequence) to rebuild *and* restart.
+> Running `docker compose restart` alone will NOT pick up source changes — the
+> container needs the freshly compiled `dist/index.js`.
 
 ## Plugin Structure (Critical)
 
@@ -363,6 +371,7 @@ If missing, run `pnpm build`.
 | Test | `pnpm test` |
 | Start dev | `./dev/setup.sh` |
 | View logs | `docker compose -f dev/docker-compose.yml logs -f openclaw-gateway` |
+| Rebuild + restart | `./dev/rebuild.sh` |
 | Restart | `pnpm build && docker compose -f dev/docker-compose.yml restart openclaw-gateway` |
 | Stop | `docker compose -f dev/docker-compose.yml down` |
 

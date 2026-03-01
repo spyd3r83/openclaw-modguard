@@ -13,7 +13,7 @@ interface BeforeAgentStartOptions {
 export async function handleBeforeAgentStart(
   context: BeforeAgentStartContext,
   options: BeforeAgentStartOptions
-): Promise<{ prependContext?: string }> {
+): Promise<{ replacePrompt?: string }> {
   const { detector, tokenizer, sessionManager } = options;
   const { prompt, sessionId } = context;
 
@@ -34,7 +34,7 @@ export async function handleBeforeAgentStart(
     const masked = await maskText(prompt, detections, tokenizer, session);
 
     return {
-      prependContext: masked
+      replacePrompt: masked
     };
   } catch (_error) {
     throw new DetectionError('Failed to mask PII in message', { sessionId: sessionId ?? 'unknown' });

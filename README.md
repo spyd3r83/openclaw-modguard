@@ -35,7 +35,7 @@ ModGuard now ships with **AgentSentry**, an inline defence layer against multi-t
 - **Context Purification** — strips malicious commands while preserving evidence needed to complete the task
 - **Safe Task Continuation** — fixes the workflow instead of terminating it, maintaining agent utility under attack
 
-Inspired by [AgentSentry research (NotebookLM)](https://notebooklm.google.com): 0% attack success rate across diverse task suites and black-box LLMs, 74.55% utility preserved under attack — up to 33% better than existing baselines.
+Inspired by [AgentSentry framework proposed by Zhang et al. (2026)](https://arxiv.org/pdf/2602.22724): 0% attack success rate across diverse task suites and black-box LLMs, 74.55% utility preserved under attack — up to 33% better than existing baselines.
 
 ---
 

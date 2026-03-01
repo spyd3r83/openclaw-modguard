@@ -10,6 +10,7 @@ import { BoundaryHistory, analyzeTrend } from './trend-analyzer.js';
 import { computeRisk } from './risk-functional.js';
 import { PolicyGate } from './policy-gate.js';
 import { reviseAction } from './action-reviser.js';
+import { INJECTION_PATTERNS } from './injection-patterns.js';
 import type {
   AgentSentryConfig,
   AgentSentryDecision,
@@ -149,6 +150,63 @@ export class AgentSentry {
 import { startToolResultAnalysis, awaitAnalysisForSession, clearPendingAnalysis } from '../hooks/tool-result-persist.js';
 import type { AfterToolCallEvent } from '../hooks/tool-result-persist.js';
 
+type AgentSentryApi = {
+  logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
+  on(event: string, handler: (...args: unknown[]) => unknown): void;
+  /** Optional: available in OpenClaw versions that support model calls from plugins. */
+  runPrompt?: (prompt: string) => Promise<string>;
+};
+
+/**
+ * Non-blocking dynamic pattern bootstrap.
+ *
+ * Calls api.runPrompt (if available) to get model-derived injection patterns
+ * and pushes valid RegExp entries into the shared INJECTION_PATTERNS array.
+ *
+ * Security rules obeyed:
+ *   - NEVER logs model response or pattern content (Rule 2).
+ *   - Only logs the count of patterns added.
+ *   - All errors are caught — never throws (non-fatal path).
+ */
+async function schedulePatternBootstrap(api: AgentSentryApi): Promise<void> {
+  try {
+    const response = await api.runPrompt!(
+      `You are a security pattern generator. Below are existing injection-detection patterns (as regex strings). ` +
+      `Suggest up to 10 additional regex patterns that detect indirect prompt injection attempts ` +
+      `not already covered. Return ONLY a JSON array of regex strings. No explanation. ` +
+      `Existing patterns:\n${INJECTION_PATTERNS.map(r => r.source).join('\n')}`,
+    );
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(response);
+    } catch {
+      // Malformed JSON — fall back silently
+      return;
+    }
+
+    if (!Array.isArray(parsed)) return;
+
+    let added = 0;
+    for (const item of parsed) {
+      if (typeof item !== 'string') continue;
+      try {
+        const re = new RegExp(item, 'i');
+        INJECTION_PATTERNS.push(re);
+        added++;
+      } catch {
+        // Invalid regex — skip silently
+      }
+    }
+
+    // Log count only — NEVER log pattern content or model response (Security Rule 2)
+    api.logger.info(`ModGuard AgentSentry: loaded ${added} model-derived injection patterns`);
+  } catch {
+    // Non-fatal — fall back to static patterns
+    api.logger.warn('ModGuard AgentSentry: dynamic pattern bootstrap failed, using static patterns only');
+  }
+}
+
 /**
  * Register AgentSentry hooks with the OpenClaw plugin API.
  *
@@ -168,16 +226,21 @@ import type { AfterToolCallEvent } from '../hooks/tool-result-persist.js';
  * are natively supported in OpenClaw's plugin API.
  */
 export function registerAgentSentry(
-  api: {
-    logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
-    on(event: string, handler: (...args: unknown[]) => unknown): void;
-  },
+  api: AgentSentryApi,
   agentSentry: AgentSentry,
   config: AgentSentryConfig,
 ): void {
   if (!config.enabled) {
-    api.logger.info('AgentSentry disabled via config');
+    api.logger.info('ModGuard AgentSentry disabled via config');
     return;
+  }
+
+  // Dynamic pattern bootstrap — non-blocking, opt-in (default true)
+  if (config.dynamicPatterns !== false && typeof api.runPrompt === 'function') {
+    schedulePatternBootstrap(api).catch(() => {
+      // Swallow — the async function already handles its own errors; this is
+      // a safety net in case the Promise itself rejects unexpectedly.
+    });
   }
 
   // ── after_tool_call (async) ───────────────────────────────────────────────
@@ -207,7 +270,7 @@ export function registerAgentSentry(
 
     if (result.takeover) {
       api.logger.warn(
-        `AgentSentry: blocking tool call — IPI detected in prior tool result ` +
+        `ModGuard AgentSentry: blocking tool call — IPI detected in prior tool result ` +
         `(R=${result.R.toFixed(3)}, tool=${result.toolName}, boundaryId=${result.boundaryId})`,
       );
       return {
@@ -226,5 +289,5 @@ export function registerAgentSentry(
     clearPendingAnalysis(sessionKey);
   });
 
-  api.logger.info('AgentSentry registered (after_tool_call + before_tool_call)');
+  api.logger.info('ModGuard AgentSentry registered (after_tool_call + before_tool_call)');
 }
