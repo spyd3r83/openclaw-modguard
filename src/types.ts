@@ -119,6 +119,7 @@ export interface IntegrityReport {
   sequenceGaps: number[];
   duplicateEntries: number[];
   corruptedLines: number[];
+  invalidSignatures?: number[];
   checksum?: string;
 }
 

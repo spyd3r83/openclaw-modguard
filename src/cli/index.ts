@@ -4,7 +4,7 @@ import yargsLib from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { createRequire } from 'node:module';
 import { Vault } from '../vault.js';
-import { Tokenizer, isValidToken } from '../tokenizer.js';
+import { isValidToken } from '../tokenizer.js';
 import { PatternType } from '../types.js';
 import { OutputFormat, OutputFormatter, FormattableData } from './formatter.js';
 import { registerAuditCommands } from './audit.js';
@@ -21,6 +21,15 @@ const MAX_QUERY_LIMIT = 1000;
 
 const auditLogger = initializeGlobalAuditLogger();
 
+function getVaultConfig(): { vaultPath: string; masterKey: string } {
+  const vaultPath = process.env.MODGUARD_VAULT_PATH;
+  const masterKey = process.env.MODGUARD_MASTER_KEY;
+  if (!vaultPath || !masterKey) {
+    process.stderr.write('Error: MODGUARD_VAULT_PATH and MODGUARD_MASTER_KEY environment variables are required.\n');
+    process.exit(1);
+  }
+  return { vaultPath, masterKey };
+}
 
 interface VaultEntry {
   id: number;
@@ -232,8 +241,7 @@ async function handleVaultList(args: any): Promise<void> {
   const sessionId = 'cli-vault-list-' + Date.now();
 
   try {
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -362,12 +370,10 @@ async function handleVaultLookup(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
-    const tokenizer = new Tokenizer(vault);
 
     const [categoryStr] = token.split('_') as [string];
     const category = categoryStr.toLowerCase();
@@ -445,8 +451,7 @@ async function handleVaultStats(args: any): Promise<void> {
   const sessionId = 'cli-vault-stats-' + Date.now();
 
   try {
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -532,7 +537,7 @@ async function handleVaultPrune(args: any): Promise<void> {
   const sessionId = 'cli-vault-prune-' + Date.now();
 
   try {
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const { vaultPath } = getVaultConfig();
 
     // Open the database directly to avoid Vault constructor calling cleanupExpired(),
     // which would remove entries before the prune command can report them.
@@ -651,8 +656,7 @@ async function handleVaultDelete(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -775,8 +779,7 @@ async function handleVaultExport(args: any): Promise<void> {
       process.exit(1);
     }
 
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     const vault = new Vault(vaultPath, masterKey);
     vault.setSessionId(sessionId);
@@ -914,7 +917,7 @@ async function handleVaultBackup(args: any): Promise<void> {
   const sessionId = 'cli-vault-backup-' + Date.now();
 
   try {
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
+    const { vaultPath } = getVaultConfig();
 
     // Generate default output path if not specified
     const outputPath = args.output || `vault-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
@@ -1018,8 +1021,7 @@ async function handleVaultRestore(args: any): Promise<void> {
 
     console.log(`Backup verified: ${verification.entryCount} entries, version ${verification.metadata?.version}`);
 
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     // Check if vault exists and warn
     let vaultExists = true;
@@ -1113,8 +1115,7 @@ async function handleVaultRepair(args: any): Promise<void> {
   const sessionId = 'cli-vault-repair-' + Date.now();
 
   try {
-    const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
+   const { vaultPath, masterKey } = getVaultConfig();
 
     // Confirm unless --force
     if (!args.force) {

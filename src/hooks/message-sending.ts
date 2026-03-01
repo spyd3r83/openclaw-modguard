@@ -8,7 +8,7 @@ interface MessageSendingOptions {
   sessionManager: SessionManager;
 }
 
-const TOKEN_PATTERN = /\b([A-Z]+_[0-9a-f]{8})\b/g;
+const TOKEN_PATTERN = /\b([A-Z][A-Z0-9_]+_[0-9a-f]{8})\b/g;
 
 export async function handleMessageSending(
   context: MessageSendingContext,

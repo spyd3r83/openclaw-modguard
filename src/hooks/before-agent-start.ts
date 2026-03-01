@@ -21,15 +21,15 @@ export async function handleBeforeAgentStart(
     return {};
   }
 
-  const session = sessionId ?? tokenizer.generateSessionId();
-  sessionManager.createSession(session);
-
   try {
     const detections = detector.detect(prompt);
 
     if (detections.length === 0) {
       return {};
     }
+
+    const session = sessionId ?? tokenizer.generateSessionId();
+    sessionManager.createSession(session);
 
     const masked = await maskText(prompt, detections, tokenizer, session);
 
@@ -40,7 +40,7 @@ export async function handleBeforeAgentStart(
     if (error instanceof Error) {
       console.error(`Error in before_agent_start hook: ${error.message}`);
     }
-    throw new DetectionError('Failed to mask PII in message', { sessionId: session });
+    throw new DetectionError('Failed to mask PII in message', { sessionId: sessionId ?? 'unknown' });
   }
 }
 

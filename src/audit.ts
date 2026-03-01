@@ -24,7 +24,6 @@ const DEFAULT_LOG_DIR = '.openclaw/modguard';
 const DEFAULT_LOG_FILE = 'audit.jsonl';
 const MAX_QUEUE_SIZE = 1000;
 const MAX_SEQUENCE_CACHE_SIZE = 10000;
-const DEFAULT_AUDIT_KEY = 'openclaw-modguard-audit-key';
 
 interface WriteQueueItem {
   entry: AuditEntry;
@@ -57,7 +56,7 @@ export class AuditLogger {
     this.fileHandle = null;
     this.minLevel = minLevel;
     this.sequenceCache = new Set();
-    this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || Buffer.from(DEFAULT_AUDIT_KEY, 'utf8');
+    this.auditKey = typeof auditKey === 'string' ? Buffer.from(auditKey, 'hex') : auditKey || crypto.randomBytes(32);
     this.retentionPolicy = {
       enabled: retentionPolicy?.enabled ?? false,
       maxAgeDays: retentionPolicy?.maxAgeDays ?? 90,
@@ -300,6 +299,7 @@ export class AuditLogger {
       sequenceGaps,
       duplicateEntries,
       corruptedLines,
+      invalidSignatures: invalidSignatures.length > 0 ? invalidSignatures : undefined,
       checksum
     };
   }
@@ -399,10 +399,11 @@ export class AuditLogger {
     }
 
     this.isWriting = true;
+    let item: WriteQueueItem | undefined;
 
     try {
       while (this.writeQueue.length > 0) {
-        const item = this.writeQueue.shift();
+        item = this.writeQueue.shift();
         if (!item) break;
 
         const line = JSON.stringify(item.entry) + '\n';
@@ -418,8 +419,11 @@ export class AuditLogger {
         item.resolve();
       }
     } catch (error) {
-      for (const item of this.writeQueue) {
+      if (item) {
         item.reject(error);
+      }
+      for (const queued of this.writeQueue) {
+        queued.reject(error);
       }
       this.writeQueue = [];
     } finally {

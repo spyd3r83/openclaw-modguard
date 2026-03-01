@@ -53,9 +53,9 @@ src/agent-sentry/
 
 ### Stage 1 — Foundation Types and Interfaces (`src/agent-sentry/types.ts`)
 
-- [ ] Define `BoundaryId` branded type (`string & { readonly __boundary: true }`)
-- [ ] Define `RegimeType` union: `'orig' | 'mask' | 'mask_sanitized' | 'orig_sanitized'`
-- [ ] Define `RegimeResult` interface:
+- [x] Define `BoundaryId` branded type (`string & { readonly __boundary: true }`)
+- [x] Define `RegimeType` union: `'orig' | 'mask' | 'mask_sanitized' | 'orig_sanitized'`
+- [x] Define `RegimeResult` interface:
   ```typescript
   interface RegimeResult {
     regime: RegimeType;
@@ -65,7 +65,7 @@ src/agent-sentry/
     timestamp: Date;
   }
   ```
-- [ ] Define `ProposedAction` interface:
+- [x] Define `ProposedAction` interface:
   ```typescript
   interface ProposedAction {
     naturalLanguage: string;
@@ -73,7 +73,7 @@ src/agent-sentry/
     sessionId: string;
   }
   ```
-- [ ] Define `DryRunToolCall` interface:
+- [x] Define `DryRunToolCall` interface:
   ```typescript
   interface DryRunToolCall {
     name: string;
@@ -83,8 +83,8 @@ src/agent-sentry/
     isMediatorContingent?: boolean;
   }
   ```
-- [ ] Define `ToolCallSeverity` union: `'low' | 'medium' | 'high'`
-- [ ] Define `ContextSnapshot` interface:
+- [x] Define `ToolCallSeverity` union: `'low' | 'medium' | 'high'`
+- [x] Define `ContextSnapshot` interface:
   ```typescript
   interface ContextSnapshot {
     boundaryId: BoundaryId;
@@ -95,7 +95,7 @@ src/agent-sentry/
     capturedAt: Date;
   }
   ```
-- [ ] Define `CausalEstimates` interface:
+- [x] Define `CausalEstimates` interface:
   ```typescript
   interface CausalEstimates {
     boundaryId: BoundaryId;
@@ -106,7 +106,7 @@ src/agent-sentry/
     sampleCount: number;   // K re-executions performed
   }
   ```
-- [ ] Define `TrendWindow` interface:
+- [x] Define `TrendWindow` interface:
   ```typescript
   interface TrendWindow {
     windowSize: number;    // w boundaries
@@ -115,7 +115,7 @@ src/agent-sentry/
     boundaries: BoundaryId[];
   }
   ```
-- [ ] Define `RiskScore` interface:
+- [x] Define `RiskScore` interface:
   ```typescript
   interface RiskScore {
     boundaryId: BoundaryId;
@@ -125,7 +125,7 @@ src/agent-sentry/
     instantaneousEscalation: boolean;  // immediate tool severity jump
   }
   ```
-- [ ] Define `PurificationResult` interface:
+- [x] Define `PurificationResult` interface:
   ```typescript
   interface PurificationResult {
     original: string;
@@ -134,7 +134,7 @@ src/agent-sentry/
     retainedEntities: string[];
   }
   ```
-- [ ] Define `ActionRevisionResult` interface:
+- [x] Define `ActionRevisionResult` interface:
   ```typescript
   interface ActionRevisionResult {
     original: ProposedAction;
@@ -144,7 +144,7 @@ src/agent-sentry/
     repaired: Array<{ original: DryRunToolCall; repaired: DryRunToolCall }>;
   }
   ```
-- [ ] Define `AgentSentryConfig` interface:
+- [x] Define `AgentSentryConfig` interface:
   ```typescript
   interface AgentSentryConfig {
     enabled: boolean;
@@ -155,7 +155,7 @@ src/agent-sentry/
     dryRunTimeoutMs: number;   // max time per dry-run regime (default: 5000)
   }
   ```
-- [ ] Define `AgentSentryAuditDetails` interface (extends `AuditEntryDetails`):
+- [x] Define `AgentSentryAuditDetails` interface (extends `AuditEntryDetails`):
   ```typescript
   interface AgentSentryAuditDetails {
     boundaryId: string;
@@ -167,16 +167,16 @@ src/agent-sentry/
     suppressedToolCount: number;
   }
   ```
-- [ ] Add `'ipi_detect'` to `AuditOperationType` in `src/types.ts`
-- [ ] Add `IPI = 'ipi'` to `PatternCategory` enum in `src/types.ts`
+- [x] Add `'ipi_detect'` to `AuditOperationType` in `src/types.ts`
+- [x] Add `IPI = 'ipi'` to `PatternCategory` enum in `src/types.ts`
 
 ---
 
 ### Stage 2 — Boundary Detection and Mediator Cache (`src/agent-sentry/boundary.ts`)
 
-- [ ] Implement `generateBoundaryId(): BoundaryId`
+- [x] Implement `generateBoundaryId(): BoundaryId`
   - Use `crypto.randomBytes(8).toString('hex')` cast to `BoundaryId`
-- [ ] Implement `MediatorCache` class:
+- [x] Implement `MediatorCache` class:
   ```typescript
   class MediatorCache {
     // Stores r_b verbatim so counterfactual re-executions replay identical content
@@ -190,7 +190,7 @@ src/agent-sentry/
   - TTL: 30 minutes (match `SessionManager` TTL)
   - Max entries: 1000 (match `SessionManager` max sessions)
   - Store only the string content; do not log or expose content outside module
-- [ ] Implement `ContextSnapshotStore` class:
+- [x] Implement `ContextSnapshotStore` class:
   - `save(snapshot: ContextSnapshot): void`
   - `restore(boundaryId: BoundaryId): ContextSnapshot | undefined`
   - `listBoundaries(sessionId: string): BoundaryId[]`
@@ -203,7 +203,7 @@ src/agent-sentry/
 
 This implements §4.1 Task-Aligned Evidence Purification.
 
-- [ ] Implement `purify(mediatorContent: string, userGoal: string): PurificationResult`
+- [x] Implement `purify(mediatorContent: string, userGoal: string): PurificationResult`
   - **Factual Fidelity**: Retain named entities (persons, orgs, dates, amounts, structured fields)
     — use `Detector` from `src/detector.ts` to locate PII; keep surrounding factual context
   - **Non-Actionability**: Strip imperative constructs, priority-overriding phrases, and
@@ -223,13 +223,13 @@ This implements §4.1 Task-Aligned Evidence Purification.
 
 This implements §2.1 Interventional Regimes.
 
-- [ ] Define `DryRunEngine` interface:
+- [x] Define `DryRunEngine` interface:
   ```typescript
   interface DryRunEngine {
     run(userInput: string, mediatorContent: string, sessionId: string): Promise<ProposedAction>
   }
   ```
-- [ ] Implement `CounterfactualOrchestrator` class:
+- [x] Implement `CounterfactualOrchestrator` class:
   ```typescript
   class CounterfactualOrchestrator {
     constructor(engine: DryRunEngine, purifier: Purifier, config: AgentSentryConfig)
@@ -251,13 +251,13 @@ This implements §2.1 Interventional Regimes.
 
 This implements §2.2 Causal Estimands & Estimators.
 
-- [ ] Implement `ActionSimilarity` utility:
+- [x] Implement `ActionSimilarity` utility:
   ```typescript
   function actionSimilarity(a: ProposedAction, b: ProposedAction): number
   // Returns 0.0–1.0. Compare naturalLanguage (Jaccard on word tokens) and
   // toolCalls (name + args hash similarity). Weighted: 0.4 NL + 0.6 tool.
   ```
-- [ ] Implement `estimateCausalEffects(regimes: Map<RegimeType, RegimeResult[]>): CausalEstimates`
+- [x] Implement `estimateCausalEffects(regimes: Map<RegimeType, RegimeResult[]>): CausalEstimates`
   - `ACE_b = mean(similarity(orig_k, mask_k) for k in 1..K)` — higher → user goal dominant
   - `IE_b  = 1 - mean(similarity(mask_k, mask_sanitized_k) for k in 1..K)` — higher → mediator influential
   - `DE_b  = mean(similarity(orig_sanitized_k, mask_sanitized_k) for k in 1..K)`
@@ -271,15 +271,15 @@ This implements §2.2 Causal Estimands & Estimators.
 
 This implements §3 Temporal Trend Analysis.
 
-- [ ] Implement `BoundaryHistory` class:
+- [x] Implement `BoundaryHistory` class:
   - Ring buffer of the last `windowSize` `CausalEstimates` per session
   - `push(estimates: CausalEstimates): void`
   - `getWindow(sessionId: string): CausalEstimates[]`
-- [ ] Implement `olsSlope(ys: number[]): number`
+- [x] Implement `olsSlope(ys: number[]): number`
   - Ordinary least squares slope over evenly-spaced indices (x = 0, 1, ..., n-1)
   - Returns 0 if fewer than 2 samples
   - Pure function; no side effects
-- [ ] Implement `analyzeTrend(history: CausalEstimates[], windowSize: number): TrendWindow`
+- [x] Implement `analyzeTrend(history: CausalEstimates[], windowSize: number): TrendWindow`
   - `beta_ACE = olsSlope(history.map(e => e.ACE))`
   - `beta_IE  = olsSlope(history.map(e => e.IE))`
   - Takeover signature: `beta_ACE < 0` (user-goal attenuation) AND `beta_IE > 0` (mediator escalation)
@@ -290,7 +290,7 @@ This implements §3 Temporal Trend Analysis.
 
 This implements §3 Risk Functional R_b and Takeover Decision Rule.
 
-- [ ] Implement `computeRisk(estimates: CausalEstimates, trend: TrendWindow, gamma: number): RiskScore`
+- [x] Implement `computeRisk(estimates: CausalEstimates, trend: TrendWindow, gamma: number): RiskScore`
   ```
   R_b = (1 - ACE_b) * w_attenuation + IE_b * w_escalation + max(0, beta_IE) * w_trend
   where w_attenuation = 0.4, w_escalation = 0.4, w_trend = 0.2
@@ -307,7 +307,7 @@ This implements §3 Risk Functional R_b and Takeover Decision Rule.
 
 This implements §4.2 Minimal Action Revision.
 
-- [ ] Implement `reviseAction(original: ProposedAction, regimes: Map<RegimeType, RegimeResult[]>, purifiedSnapshot: ContextSnapshot): ActionRevisionResult`
+- [x] Implement `reviseAction(original: ProposedAction, regimes: Map<RegimeType, RegimeResult[]>, purifiedSnapshot: ContextSnapshot): ActionRevisionResult`
   - **Preservation**: Keep tool calls where `severity='low'` AND NOT `isMediatorContingent`
     - `isMediatorContingent`: call appears in `orig` but not in `orig_sanitized` across majority of K samples
   - **Suppression**: Remove tool calls where `isStateChanging=true` AND `isMediatorContingent=true`
@@ -323,7 +323,7 @@ This implements §4.2 Minimal Action Revision.
 
 This implements §5 Policy Gate (Auth check).
 
-- [ ] Implement `PolicyGate` class:
+- [x] Implement `PolicyGate` class:
   ```typescript
   class PolicyGate {
     constructor(policy: Policy)
@@ -341,7 +341,7 @@ This implements §5 Policy Gate (Auth check).
 
 ### Stage 10 — AgentSentry Orchestrator (`src/agent-sentry/index.ts`)
 
-- [ ] Implement `AgentSentry` class:
+- [x] Implement `AgentSentry` class:
   ```typescript
   class AgentSentry {
     constructor(config: AgentSentryConfig, engine: DryRunEngine, vault: Vault, policy: Policy)
@@ -369,7 +369,7 @@ This implements §5 Policy Gate (Auth check).
        then `reviseAction(origAction, regimes, purifiedSnapshot)` then `policyGate.authorize(safeAction)`
     8. Log audit entry (operation: `'ipi_detect'`, level based on takeover) — no PII in log
     9. Return `AgentSentryDecision`
-- [ ] Export `registerAgentSentry(api: OpenClawPluginApi, state: ModGuardState, config: AgentSentryConfig): void`
+- [x] Export `registerAgentSentry(api: OpenClawPluginApi, state: ModGuardState, config: AgentSentryConfig): void`
   - Registers `before_tool_result` hook once it becomes available in `OpenClawPluginApi`
   - Until `before_tool_result` exists: registers a `before_agent_start` adapter that extracts
     any tool return data from `context.messages` (if present) and runs `analyzeToolReturn`
@@ -380,11 +380,11 @@ This implements §5 Policy Gate (Auth check).
 
 The current `OpenClawPluginApi` in `src/index.ts` must be extended:
 
-- [ ] Add hook overload for `before_tool_result`:
+- [x] Add hook overload for `before_tool_result`:
   ```typescript
   on(event: 'before_tool_result', handler: BeforeToolResultHandler): void;
   ```
-- [ ] Define `BeforeToolResultContext`:
+- [x] Define `BeforeToolResultContext`:
   ```typescript
   interface BeforeToolResultContext {
     sessionId: string;
@@ -394,7 +394,7 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
     userGoal: string;                 // original user intent
   }
   ```
-- [ ] Define `BeforeToolResultHandler`:
+- [x] Define `BeforeToolResultHandler`:
   ```typescript
   type BeforeToolResultHandler = (
     context: BeforeToolResultContext
@@ -402,11 +402,11 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
   ```
   - `toolOutput`: allow handler to replace mediator content with purified version
   - `cancel`: allow handler to suppress the tool return entirely
-- [ ] Add hook overload for `dry_run`:
+- [x] Add hook overload for `dry_run`:
   ```typescript
   on(event: 'dry_run', handler: DryRunHandler): void;
   ```
-- [ ] Define `DryRunContext`:
+- [x] Define `DryRunContext`:
   ```typescript
   interface DryRunContext {
     sessionId: string;
@@ -415,13 +415,13 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
     record: boolean;    // always true; prevents external side effects from committing
   }
   ```
-- [ ] Define `DryRunHandler`:
+- [x] Define `DryRunHandler`:
   ```typescript
   type DryRunHandler = (
     context: DryRunContext
   ) => Promise<{ proposedAction: ProposedAction } | void>;
   ```
-- [ ] Update `openclaw.plugin.json` `configSchema.properties` to include `agentSentry` object:
+- [x] Update `openclaw.plugin.json` `configSchema.properties` to include `agentSentry` object:
   ```json
   "agentSentry": {
     "type": "object",
@@ -440,16 +440,16 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
 
 ### Stage 12 — Hook Registration Integration (`src/hooks/index.ts`)
 
-- [ ] Import `registerAgentSentry` from `src/agent-sentry/index.ts`
-- [ ] Call `registerAgentSentry(api, state, config.agentSentry ?? defaultAgentSentryConfig)` in `registerHooks`
-- [ ] Ensure `AgentSentry` re-uses the shared `Vault` instance from `ModGuardState` (no second vault)
-- [ ] Ensure `AgentSentry` re-uses the shared `Policy` instance loaded via `loadPolicy`
+- [x] Import `registerAgentSentry` from `src/agent-sentry/index.ts`
+- [x] Call `registerAgentSentry(api, state, config.agentSentry ?? defaultAgentSentryConfig)` in `registerHooks`
+- [x] Ensure `AgentSentry` re-uses the shared `Vault` instance from `ModGuardState` (no second vault)
+- [x] Ensure `AgentSentry` re-uses the shared `Policy` instance loaded via `loadPolicy`
 
 ---
 
 ### Stage 13 — Error Types (`src/errors.ts`)
 
-- [ ] Add `IpiError` (base):
+- [x] Add `IpiError` (base):
   ```typescript
   export class IpiError extends Error {
     constructor(message: string, public readonly context?: Record<string, unknown>) {
@@ -457,18 +457,18 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
     }
   }
   ```
-- [ ] Add `CounterfactualError extends IpiError` — dry-run regime failure
-- [ ] Add `RiskEstimationError extends IpiError` — causal estimator failure
-- [ ] Add `PurificationError extends IpiError` — purifier failure
-- [ ] Add `PolicyGateError extends IpiError` — auth check failure
-- [ ] All error constructors: message must be static/generic — no user data or tool output content
+- [x] Add `CounterfactualError extends IpiError` — dry-run regime failure
+- [x] Add `RiskEstimationError extends IpiError` — causal estimator failure
+- [x] Add `PurificationError extends IpiError` — purifier failure
+- [x] Add `PolicyGateError extends IpiError` — auth check failure
+- [x] All error constructors: message must be static/generic — no user data or tool output content
 
 ---
 
 ### Stage 14 — Audit Integration (`src/types.ts` and `src/audit.ts`)
 
-- [ ] Add `'ipi_detect'` to `AuditOperationType` union
-- [ ] Define `IpiAuditDetails`:
+- [x] Add `'ipi_detect'` to `AuditOperationType` union
+- [x] Define `IpiAuditDetails`:
   ```typescript
   interface IpiAuditDetails {
     boundaryId: string;
@@ -485,8 +485,8 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
     authorized: boolean;
   }
   ```
-- [ ] Ensure `AuditLogger.log` accepts `IpiAuditDetails` as `details` for `operation='ipi_detect'`
-- [ ] **Security**: Never include `mediatorContent`, `userInput`, `toolOutput`, or any PII in audit entries
+- [x] Ensure `AuditLogger.log` accepts `IpiAuditDetails` as `details` for `operation='ipi_detect'`
+- [x] **Security**: Never include `mediatorContent`, `userInput`, `toolOutput`, or any PII in audit entries
 
 ---
 
@@ -494,33 +494,33 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
 
 #### Unit tests (`test/agent-sentry/`)
 
-- [ ] `boundary.test.ts` — `MediatorCache` TTL, eviction, verbatim replay
-- [ ] `purifier.test.ts` — strips imperatives; retains factual entities; task-alignment filtering
-- [ ] `causal-estimator.test.ts` — ACE/IE/DE calculations; edge cases (K=1, identical regimes)
-- [ ] `trend-analyzer.test.ts` — OLS slope correctness; window boundary conditions; insufficient history
-- [ ] `risk-functional.test.ts` — R_b formula; takeover triggers; instantaneous escalation detection
-- [ ] `action-reviser.test.ts` — preserve/suppress/repair logic; PII-free suppression logs
-- [ ] `policy-gate.test.ts` — authorize blocks state-changing mediator-contingent calls
-- [ ] `agent-sentry.test.ts` — full `analyzeToolReturn` integration; benign mediator (no takeover); malicious mediator (takeover + revision)
+- [x] `boundary.test.ts` — `MediatorCache` TTL, eviction, verbatim replay
+- [x] `purifier.test.ts` — strips imperatives; retains factual entities; task-alignment filtering
+- [x] `causal-estimator.test.ts` — ACE/IE/DE calculations; edge cases (K=1, identical regimes)
+- [x] `trend-analyzer.test.ts` — OLS slope correctness; window boundary conditions; insufficient history
+- [x] `risk-functional.test.ts` — R_b formula; takeover triggers; instantaneous escalation detection
+- [x] `action-reviser.test.ts` — preserve/suppress/repair logic; PII-free suppression logs
+- [x] `policy-gate.test.ts` — authorize blocks state-changing mediator-contingent calls
+- [x] `agent-sentry.test.ts` — full `analyzeToolReturn` integration; benign mediator (no takeover); malicious mediator (takeover + revision)
 
 #### Security tests
 
-- [ ] Verify no `mediatorContent` appears in any audit log entry
-- [ ] Verify `IpiError` and subclasses never expose tool output in `error.message`
-- [ ] Verify `MediatorCache` entries are bounded and respect TTL
+- [x] Verify no `mediatorContent` appears in any audit log entry
+- [x] Verify `IpiError` and subclasses never expose tool output in `error.message`
+- [x] Verify `MediatorCache` entries are bounded and respect TTL
 
 #### Accuracy tests (`test/agent-sentry.accuracy.test.ts`)
 
-- [ ] Benign tool returns (factual data, no directives) → `takeover=false` rate ≥ 95%
-- [ ] Obvious IPI payloads (explicit instruction override) → `takeover=true` rate ≥ 90%
-- [ ] Subtle IPI payloads (goal drift over 3+ turns) → `takeover=true` rate ≥ 70%
+- [x] Benign tool returns (factual data, no directives) → `takeover=false` rate ≥ 95%
+- [x] Obvious IPI payloads (explicit instruction override) → `takeover=true` rate ≥ 90%
+- [x] Subtle IPI payloads (goal drift over 3+ turns) → `takeover=true` rate ≥ 70%
 
 ---
 
 ### Stage 16 — Configuration and Defaults
 
-- [ ] Add `agentSentry` field to the config schema in `src/index.ts` `configSchema`
-- [ ] Default `AgentSentryConfig`:
+- [x] Add `agentSentry` field to the config schema in `src/index.ts` `configSchema`
+- [x] Default `AgentSentryConfig`:
   ```typescript
   const defaultAgentSentryConfig: AgentSentryConfig = {
     enabled: true,
@@ -531,7 +531,7 @@ The current `OpenClawPluginApi` in `src/index.ts` must be extended:
     dryRunTimeoutMs: 5000,
   };
   ```
-- [ ] Document in `AGENTS.md` under "Known Limitations" that dry-run requires `dry_run` hook support from OpenClaw; until available, single-pass analysis is used
+- [x] Document in `AGENTS.md` under "Known Limitations" that dry-run requires `dry_run` hook support from OpenClaw; until available, single-pass analysis is used
 
 ---
 

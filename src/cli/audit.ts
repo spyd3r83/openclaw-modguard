@@ -20,7 +20,7 @@ function parseDate(dateStr: string): Date | undefined {
 function parseOperationTypes(ops: string | string[] | undefined): AuditOperationType[] | undefined {
   if (!ops) return undefined;
 
-  const validOps: AuditOperationType[] = ['mask', 'unmask', 'vault_store', 'vault_retrieve', 'vault_cleanup', 'cli'];
+  const validOps: AuditOperationType[] = ['mask', 'unmask', 'vault_store', 'vault_retrieve', 'vault_cleanup', 'cli', 'ipi_detect'];
   const opsArray = Array.isArray(ops) ? ops : [ops];
 
   const result = opsArray
@@ -410,9 +410,8 @@ function getColorForEntry(entry: any): string {
   return '\x1b[0m';
 }
 
-export function registerAuditCommands(yargs: any): void {
-  yargs.command('audit', 'Audit log management', (yargs: any) => {
-    return yargs
+export function registerAuditCommands(yargs: any): any {
+  return yargs
       .command('export', 'Export audit logs', (yargs: any) => {
         return yargs
           .option('start', {
@@ -544,5 +543,4 @@ export function registerAuditCommands(yargs: any): void {
           .example('$0 audit tail --follow', 'Follow audit log in real-time');
       }, handleAuditTail)
       .demandCommand(1, 'Please specify an audit command');
-  });
 }
