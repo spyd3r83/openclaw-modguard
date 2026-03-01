@@ -1,7 +1,7 @@
 import type { Vault } from '../vault.js';
 import type { Policy } from '../policy.js';
 import { AuditLogger } from '../audit.js';
-import { generateBoundaryId, MediatorCache, ContextSnapshotStore } from './boundary.js';
+import { MediatorCache, ContextSnapshotStore } from './boundary.js';
 import { Purifier } from './purifier.js';
 import { CounterfactualOrchestrator } from './counterfactual.js';
 import type { DryRunEngine } from './counterfactual.js';
@@ -10,7 +10,6 @@ import { BoundaryHistory, analyzeTrend } from './trend-analyzer.js';
 import { computeRisk } from './risk-functional.js';
 import { PolicyGate } from './policy-gate.js';
 import { reviseAction } from './action-reviser.js';
-import { IpiError } from '../errors.js';
 import type {
   AgentSentryConfig,
   AgentSentryDecision,
@@ -147,9 +146,26 @@ export class AgentSentry {
   }
 }
 
+import { startToolResultAnalysis, awaitAnalysisForSession, clearPendingAnalysis } from '../hooks/tool-result-persist.js';
+import type { AfterToolCallEvent } from '../hooks/tool-result-persist.js';
+
 /**
  * Register AgentSentry hooks with the OpenClaw plugin API.
- * Uses before_agent_start as an adapter until before_tool_result is available.
+ *
+ * Hook strategy:
+ *   after_tool_call (async) — fires after each tool call completes. Checked
+ *     lazily at call time (not pre-captured at session creation), so it fires
+ *     correctly even in embedded agent worker subprocesses. Starts async IPI
+ *     analysis, stores the pending promise keyed by sessionKey.
+ *
+ *   before_tool_call (async) — awaits the pending analysis (with timeout) and
+ *     blocks the next tool call if takeover=true. This is the enforcement point:
+ *     the model cannot act on injected content.
+ *
+ *   agent_end (cleanup) — clears pending analysis state for the session.
+ *
+ * No OpenClaw source patching is required for this integration — all three hooks
+ * are natively supported in OpenClaw's plugin API.
  */
 export function registerAgentSentry(
   api: {
@@ -164,50 +180,51 @@ export function registerAgentSentry(
     return;
   }
 
-  // Adapter: before_agent_start intercepts messages that contain tool return content.
-  // Full integration requires before_tool_result hook (not yet in OpenClaw).
-  api.on('before_agent_start', async (ctx: unknown) => {
-    const context = ctx as { prompt?: string; messages?: unknown[]; sessionId?: string };
+  // ── after_tool_call (async) ───────────────────────────────────────────────
+  // Fires after every tool call completes. Checked lazily at call time so it
+  // reliably fires in embedded agent worker subprocesses. We start async IPI
+  // analysis here and store the promise — enforcement happens in before_tool_call.
+  api.on('after_tool_call', async (event: unknown, ctx: unknown) => {
+    const e = event as AfterToolCallEvent;
+    const context = ctx as { sessionKey?: string; agentId?: string };
+    const sessionKey = context.sessionKey ?? context.agentId ?? 'unknown';
 
-    // Only run if there are messages (indicating a multi-turn conversation with tool returns)
-    if (!context.messages || context.messages.length === 0) return;
+    startToolResultAnalysis(e, sessionKey, agentSentry, api.logger);
+    // Return undefined — we do not block here.
+    // Enforcement happens in before_tool_call.
+  });
 
-    const boundaryId = generateBoundaryId();
-    const sessionId = context.sessionId ?? 'unknown';
+  // ── before_tool_call (async) ──────────────────────────────────────────────
+  // Fires before each tool call the model tries to make. If the last tool result
+  // was flagged as an IPI takeover, block this call to prevent acting on injected
+  // instructions.
+  api.on('before_tool_call', async (event: unknown, ctx: unknown) => {
+    const context = ctx as { sessionKey?: string; agentId?: string; toolName?: string };
+    const sessionKey = context.sessionKey ?? context.agentId ?? 'unknown';
 
-    // Extract any tool return content from messages
-    const toolMessages = (context.messages as Array<{ role?: string; content?: string }>)
-      .filter(m => m.role === 'tool' && typeof m.content === 'string');
+    const result = await awaitAnalysisForSession(sessionKey);
+    if (!result) return;  // no pending analysis
 
-    if (toolMessages.length === 0) return;
-
-    // Analyze the last tool return
-    const lastToolMsg = toolMessages[toolMessages.length - 1];
-    if (!lastToolMsg.content) return;
-
-    const snapshot: ContextSnapshot = {
-      boundaryId,
-      userInput: context.prompt ?? '',
-      mediatorContent: lastToolMsg.content,
-      dialogueHistory: [],
-      sessionId,
-      capturedAt: new Date(),
-    };
-
-    try {
-      const decision = await agentSentry.analyzeToolReturn(snapshot);
-      if (decision.takeover) {
-        // Log only — do not modify prompt in before_agent_start (limitation of hook)
-        api.logger.warn(`AgentSentry: IPI takeover detected (R=${decision.riskScore.R.toFixed(3)}, boundaryId=${boundaryId})`);
-      }
-    } catch (err) {
-      if (err instanceof IpiError) {
-        api.logger.error(`AgentSentry analysis failed: ${err.name}`);
-      } else {
-        api.logger.error('AgentSentry analysis failed');
-      }
+    if (result.takeover) {
+      api.logger.warn(
+        `AgentSentry: blocking tool call — IPI detected in prior tool result ` +
+        `(R=${result.R.toFixed(3)}, tool=${result.toolName}, boundaryId=${result.boundaryId})`,
+      );
+      return {
+        block: true,
+        blockReason:
+          'Tool call blocked: the previous tool result contained injection directives. ' +
+          'The agent cannot proceed with this action.',
+      };
     }
   });
 
-  api.logger.info('AgentSentry registered (before_agent_start adapter mode)');
+  // ── agent_end (cleanup) ───────────────────────────────────────────────────
+  api.on('agent_end', (_event: unknown, ctx: unknown) => {
+    const context = ctx as { sessionKey?: string; agentId?: string };
+    const sessionKey = context.sessionKey ?? context.agentId ?? 'unknown';
+    clearPendingAnalysis(sessionKey);
+  });
+
+  api.logger.info('AgentSentry registered (after_tool_call + before_tool_call)');
 }

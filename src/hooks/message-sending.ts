@@ -29,7 +29,7 @@ export async function handleMessageSending(
   const session = sessionManager.getSession(sessionId);
 
   if (!session) {
-    console.warn(`No session found for sessionId ${sessionId}, cannot unmask tokens`);
+    console.warn('No session found in message_sending hook, cannot unmask tokens');
     return {};
   }
 

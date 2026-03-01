@@ -62,6 +62,9 @@ export type {
   BeforeAgentStartHandler,
   MessageSendingHandler,
   AgentEndHandler,
+  ToolResultPersistContext,
+  ToolResultMessage,
+  ToolResultPersistHandler,
   BeforeToolResultContext,
   DryRunContext,
   BeforeToolResultHandler,
@@ -87,9 +90,33 @@ interface AgentEndContext {
   error?: string;
 }
 
-type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ prependContext?: string } | void>;
+type BeforeAgentStartHandler = (context: BeforeAgentStartContext) => Promise<{ prependContext?: string; replacePrompt?: string } | void>;
 type MessageSendingHandler = (context: MessageSendingContext) => Promise<{ content?: string } | void>;
 type AgentEndHandler = (context: AgentEndContext) => Promise<void>;
+
+/**
+ * OpenClaw's actual tool_result_persist hook context.
+ * Fires synchronously when a tool result is about to be written to the session transcript.
+ * Handlers must be synchronous — returning a Promise is an error.
+ */
+interface ToolResultPersistContext {
+  /** The toolResult AgentMessage about to be persisted. */
+  message: ToolResultMessage;
+  toolName?: string;
+  toolCallId?: string;
+  isSynthetic?: boolean;
+}
+
+/** Minimal shape of the ToolResultMessage from @mariozechner/pi-agent-core. */
+interface ToolResultMessage {
+  role: 'toolResult';
+  toolCallId: string;
+  toolName: string;
+  content: Array<{ type: string; text?: string }>;
+  isError: boolean;
+  timestamp: number;
+  [key: string]: unknown;
+}
 
 interface BeforeToolResultContext {
   sessionId: string;
@@ -105,6 +132,15 @@ interface DryRunContext {
   mediatorContent: string;
   record: boolean;
 }
+
+/**
+ * Synchronous handler for tool_result_persist.
+ * Must NOT return a Promise. Return { message } to replace the persisted message.
+ */
+type ToolResultPersistHandler = (
+  event: ToolResultPersistContext,
+  ctx: { agentId?: string; sessionKey?: string; toolName?: string; toolCallId?: string },
+) => { message?: ToolResultMessage } | void;
 
 type BeforeToolResultHandler = (context: BeforeToolResultContext) => Promise<{ toolOutput?: string; cancel?: boolean } | void>;
 type DryRunHandler = (context: DryRunContext) => Promise<{ proposedAction: import('./agent-sentry/types.js').ProposedAction } | void>;
@@ -127,6 +163,7 @@ interface OpenClawPluginApi {
   on(event: 'before_agent_start', handler: BeforeAgentStartHandler): void;
   on(event: 'message_sending', handler: MessageSendingHandler): void;
   on(event: 'agent_end', handler: AgentEndHandler): void;
+  on(event: 'tool_result_persist', handler: ToolResultPersistHandler): void;
   on(event: 'before_tool_result', handler: BeforeToolResultHandler): void;
   on(event: 'dry_run', handler: DryRunHandler): void;
   on(event: string, handler: (...args: unknown[]) => unknown): void;
@@ -212,7 +249,7 @@ const guardPlugin = {
         return { success: true, data: { vaultPath, masterKey } };
       } catch (error) {
         if (error instanceof VaultError) {
-          return { success: false, error: error.message };
+          return { success: false, error: 'Failed to initialize vault' };
         }
         return { success: false, error: 'Failed to initialize modguard' };
       }

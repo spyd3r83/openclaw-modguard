@@ -62,9 +62,9 @@ export interface RiskScore {
 }
 
 export interface PurificationResult {
-  original: string;
   purified: string;
-  strippedDirectives: string[];
+  /** Number of directive sentences stripped (no verbatim content). */
+  strippedCount: number;
   retainedEntities: string[];
 }
 

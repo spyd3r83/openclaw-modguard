@@ -6,8 +6,7 @@ import { handleBeforeAgentStart } from './before-agent-start.js';
 import { handleMessageSending } from './message-sending.js';
 import { handleAgentEnd } from './agent-end.js';
 import { AgentSentry, registerAgentSentry, defaultAgentSentryConfig } from '../agent-sentry/index.js';
-import type { DryRunEngine } from '../agent-sentry/counterfactual.js';
-import type { ProposedAction } from '../agent-sentry/types.js';
+import { TextAnalysisDryRunEngine } from '../agent-sentry/text-analysis-engine.js';
 import { Policy } from '../policy.js';
 
 interface OpenClawPluginApi {
@@ -50,23 +49,22 @@ export function registerHooks(api: OpenClawPluginApi, state: ModGuardState): voi
 
   api.logger.info('ModGuard hooks registered: before_agent_start, message_sending, agent_end');
 
-  // Stub engine — used until before_tool_result hook is available in OpenClaw
-  const stubEngine: DryRunEngine = {
-    async run(_userInput: string, _mediatorContent: string, sessionId: string): Promise<ProposedAction> {
-      return { naturalLanguage: '', toolCalls: [], sessionId };
-    },
-  };
-
-  // Create a default allow-all policy for AgentSentry
+  // AgentSentry: IPI detection via after_tool_call + before_tool_call.
+  // No OpenClaw patching required — both hooks are natively supported.
+  //
+  // Calibrated gamma for TextAnalysisDryRunEngine:
+  // Obvious IPI payloads → R≈0.42; benign returns → R≈0.37.
+  // gamma=0.38 catches obvious injections with no false positives on clean content.
+  const textEngine = new TextAnalysisDryRunEngine();
   const sentryPolicy = new Policy({ rules: [], defaultAction: 'allow' });
+  const sentryConfig = { ...defaultAgentSentryConfig, gamma: 0.38 };
 
   const agentSentry = new AgentSentry(
-    defaultAgentSentryConfig,
-    stubEngine,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    state.vault as any,
+    sentryConfig,
+    textEngine,
+    state.vault as import('../vault.js').Vault,
     sentryPolicy,
   );
 
-  registerAgentSentry(api, agentSentry, defaultAgentSentryConfig);
+  registerAgentSentry(api, agentSentry, sentryConfig);
 }
