@@ -70,7 +70,7 @@ export function validatePolicyConfig(config: unknown): config is PolicyConfig {
     throw new InvalidPolicyConfigError('failClosed must be a boolean', { failClosed: typedConfig.failClosed });
   }
 
-  if (typedConfig.defaultAction && typeof typedConfig.defaultAction !== 'string' && !VALID_ACTIONS.includes(typedConfig.defaultAction as PatternAction)) {
+  if (typedConfig.defaultAction !== undefined && (typeof typedConfig.defaultAction !== 'string' || !VALID_ACTIONS.includes(typedConfig.defaultAction as PatternAction))) {
     throw new InvalidPolicyConfigError('Invalid default action', { defaultAction: typedConfig.defaultAction, validActions: VALID_ACTIONS });
   }
 

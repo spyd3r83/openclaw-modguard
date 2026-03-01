@@ -49,12 +49,13 @@ export class Policy {
 
   constructor(config: PolicyConfig) {
     this.rules = this.sortRulesByPriority(config.rules || []);
-    this.failClosed = config.failClosed ?? true;
+    this.failClosed = config.failClosed ?? false;
     this.defaultAction = config.defaultAction ?? 'allow';
   }
 
   private sortRulesByPriority(rules: PolicyRule[]): PolicyRule[] {
-    return [...rules].sort((a, b) => b.priority - a.priority);
+    // Lower numeric priority value = evaluated first (higher urgency)
+    return [...rules].sort((a, b) => a.priority - b.priority);
   }
 
   evaluate(context: PolicyContext): PolicyDecision {
@@ -67,7 +68,8 @@ export class Policy {
     if (this.failClosed) {
       return {
         action: 'block',
-        blockReason: 'No matching policy rule (failClosed=true)'
+        blockReason: 'No matching policy rule (failClosed=true)',
+        cancel: true
       };
     }
 
@@ -89,14 +91,15 @@ export class Policy {
     const contextValue = this.getContextValue(condition.type, context);
 
     if (contextValue === undefined || contextValue === null) {
-      return false;
+      // For != operator, undefined/null context values are "not equal" to any specific value
+      return condition.operator === '!=';
     }
 
     switch (condition.operator) {
       case '==':
-        return this.isEqual(contextValue, condition.value);
+        return this.matchesValue(contextValue, condition.value);
       case '!=':
-        return !this.isEqual(contextValue, condition.value);
+        return !this.matchesValue(contextValue, condition.value);
       case '>=':
         return this.isGreaterOrEqual(contextValue, condition.value);
       case '<=':
@@ -108,6 +111,26 @@ export class Policy {
       default:
         return false;
     }
+  }
+
+  /**
+   * Matches a context value against a condition value.
+   * Supports:
+   *  - Wildcard '*' matches any non-null/undefined value
+   *  - Array condition value: contextValue must be in the array
+   *  - String comparison: case-insensitive
+   *  - Direct equality for other types
+   */
+  private matchesValue(contextValue: unknown, conditionValue: unknown): boolean {
+    // Wildcard matches any value
+    if (conditionValue === '*') return true;
+
+    // Array membership: context value must be in the array
+    if (Array.isArray(conditionValue)) {
+      return conditionValue.some((v) => this.isEqual(contextValue, v));
+    }
+
+    return this.isEqual(contextValue, conditionValue);
   }
 
   private getContextValue(type: PolicyCondition['type'], context: PolicyContext): unknown {

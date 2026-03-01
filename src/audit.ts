@@ -514,19 +514,22 @@ export class AuditLogger {
   }
 
   private verifyEntry(entry: SignedAuditEntry): boolean {
-    const entryWithoutSignature: Omit<AuditEntry, 'signature'> = {
+    // Reconstruct exactly the data that was signed: base fields without timestamp/sequence/signature,
+    // plus sequence as second arg (timestamp is excluded from the HMAC, matching signEntry at write time).
+    const baseEntry: Omit<AuditEntry, 'sequence' | 'timestamp' | 'signature'> = {
       operation: entry.operation,
       sessionId: entry.sessionId,
       level: entry.level,
       success: entry.success,
       duration: entry.duration,
-      details: entry.details,
-      sequence: entry.sequence,
-      timestamp: entry.timestamp
+      details: entry.details
     };
 
-    const expectedSignature = this.signEntry(entryWithoutSignature as any, entry.sequence);
-    return entry.signature === expectedSignature;
+    const expectedSignature = this.signEntry(baseEntry, entry.sequence);
+    const actual = Buffer.from(entry.signature, 'hex');
+    const expected = Buffer.from(expectedSignature, 'hex');
+    if (actual.length !== expected.length) return false;
+    return crypto.timingSafeEqual(actual, expected);
   }
 
   async *follow(filter?: AuditFilter, pollIntervalMs: number = 100): AsyncGenerator<AuditEntry> {

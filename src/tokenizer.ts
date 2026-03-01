@@ -304,7 +304,21 @@ export class Tokenizer {
 }
 
 export function isValidToken(token: unknown): token is Token {
-  const tokenizer = new Tokenizer(new Vault(':memory:', 'dummy-key'));
-  return tokenizer.isValidToken(token);
+  if (typeof token !== 'string') {
+    return false;
+  }
+
+  const match = TOKEN_REGEX.exec(token);
+  if (!match) {
+    return false;
+  }
+
+  const prefix = match[1].toUpperCase();
+  const allPatternTypes: PatternType[] = [];
+  for (const patterns of TOKEN_PREFIXES.values()) {
+    allPatternTypes.push(...patterns);
+  }
+
+  return allPatternTypes.map(pt => pt.toString().toUpperCase()).includes(prefix);
 }
 

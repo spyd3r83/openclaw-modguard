@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import yargsModule from 'yargs';
+import yargsLib from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import { createRequire } from 'node:module';
 import { Vault } from '../vault.js';
 import { Tokenizer, isValidToken } from '../tokenizer.js';
 import { PatternType } from '../types.js';
@@ -11,7 +12,10 @@ import { initializeGlobalAuditLogger, getGlobalAuditLogger } from '../audit.js';
 import { vaultBackup, vaultRestore, vaultRepair, verifyBackup } from '../backup.js';
 import * as fs from 'node:fs/promises';
 
-const yargs: any = (yargsModule as any).default;
+const _require = createRequire(import.meta.url);
+const Database = _require('better-sqlite3') as typeof import('better-sqlite3');
+
+const yargs: any = typeof yargsLib === 'function' ? yargsLib : (yargsLib as any).default;
 
 const MAX_QUERY_LIMIT = 1000;
 
@@ -28,6 +32,16 @@ interface VaultEntry {
 
 const argv = yargs(hideBin(process.argv))
   .scriptName('openclaw modguard')
+  .strict()
+  .fail((msg: string | null, err: Error | undefined) => {
+    if (err) {
+      // Re-throw actual errors (from check(), etc.)
+      process.stderr.write(`${err.message}\n`);
+    } else {
+      process.stderr.write(`Error: Please specify a command\n`);
+    }
+    process.exit(1);
+  })
   .command('audit', 'Audit log management', registerAuditCommands)
   .command('vault', 'Manage vault operations', (yargs: any) => {
     return yargs
@@ -64,7 +78,7 @@ const argv = yargs(hideBin(process.argv))
           .example('$0 vault list --format json --limit 100', 'List first 100 entries in JSON format')
           .example('$0 vault list --category email --older-than 7d', 'List email entries older than 7 days');
       }, handleVaultList)
-      .command('lookup <token>', 'Look up a specific token in vault', (yargs: any) => {
+      .command('lookup [token]', 'Look up a specific token in vault', (yargs: any) => {
         return yargs
           .positional('token', {
             type: 'string',
@@ -76,6 +90,12 @@ const argv = yargs(hideBin(process.argv))
             choices: ['table', 'json', 'csv'] as const,
             default: 'table' as const,
             description: 'Output format'
+          })
+          .check((argv: any) => {
+            if (!argv.token) {
+              throw new Error('Token is required');
+            }
+            return true;
           })
           .example('$0 vault lookup EMAIL_12345678', 'Look up token EMAIL_12345678');
       }, handleVaultLookup)
@@ -374,7 +394,8 @@ async function handleVaultLookup(args: any): Promise<void> {
     );
     console.log(output);
 
-    console.log(`[AUDIT] Token lookup performed: ${token}`);
+    // Print audit notice to stderr to avoid polluting JSON stdout
+    process.stderr.write(`[AUDIT] Token lookup performed: ${token}\n`);
 
     const elapsed = Date.now() - startTime;
 
@@ -512,17 +533,17 @@ async function handleVaultPrune(args: any): Promise<void> {
 
   try {
     const vaultPath = process.env.MODGUARD_VAULT_PATH || '/tmp/openclaw-modguard-vault.db';
-    const masterKey = process.env.MODGUARD_MASTER_KEY || 'default-master-key';
 
-    const vault = new Vault(vaultPath, masterKey);
-    vault.setSessionId(sessionId);
-    const db = (vault as any).db;
+    // Open the database directly to avoid Vault constructor calling cleanupExpired(),
+    // which would remove entries before the prune command can report them.
+    const db = new Database(vaultPath);
 
-    const expiredEntries = db.prepare('SELECT id, token, category FROM entries WHERE expires_at IS NOT NULL AND expires_at < ?').all(Date.now()) as Array<{ id: number; token: string; category: string }>;
+    const now = Date.now();
+    const expiredEntries = db.prepare('SELECT id, token, category FROM entries WHERE expires_at IS NOT NULL AND expires_at < ?').all(now) as Array<{ id: number; token: string; category: string }>;
 
     if (expiredEntries.length === 0) {
       console.log('No expired entries to prune.');
-      vault.close();
+      db.close();
       return;
     }
 
@@ -534,7 +555,7 @@ async function handleVaultPrune(args: any): Promise<void> {
     if (args['dry-run']) {
       console.log('\n[Dry-run mode] No entries will be deleted.');
       console.log('Run without --dry-run to actually delete entries.');
-      vault.close();
+      db.close();
       return;
     }
 
@@ -554,7 +575,7 @@ async function handleVaultPrune(args: any): Promise<void> {
 
       if (answer !== 'yes' && answer !== 'y') {
         console.log('Prune cancelled.');
-        vault.close();
+        db.close();
         return;
       }
     }
@@ -573,7 +594,7 @@ async function handleVaultPrune(args: any): Promise<void> {
     console.log(`Space freed: ${formatBytes(spaceFreed)}`);
     console.log('[AUDIT] Vault prune operation completed');
 
-    vault.close();
+    db.close();
 
     const elapsed = Date.now() - startTime;
 
